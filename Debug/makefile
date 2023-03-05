@@ -182,34 +182,34 @@ endif
 
 # Add inputs and outputs from these tool invocations to the build variables 
 EXE_OUTPUTS += \
-mspCommProtocol.out \
+msp432-endpoint.out \
 
 EXE_OUTPUTS__QUOTED += \
-"mspCommProtocol.out" \
+"msp432-endpoint.out" \
 
 BIN_OUTPUTS += \
-mspCommProtocol.hex \
+msp432-endpoint.hex \
 
 BIN_OUTPUTS__QUOTED += \
-"mspCommProtocol.hex" \
+"msp432-endpoint.hex" \
 
 
 # All Target
 all: $(OBJS) $(CMD_SRCS) $(GEN_CMDS)
-	@$(MAKE) --no-print-directory -Onone "mspCommProtocol.out" secondary-outputs
+	@$(MAKE) --no-print-directory -Onone "msp432-endpoint.out" secondary-outputs
 
 # Tool invocations
-mspCommProtocol.out: $(OBJS) $(CMD_SRCS) $(GEN_CMDS)
+msp432-endpoint.out: $(OBJS) $(CMD_SRCS) $(GEN_CMDS)
 	@echo 'Building target: "$@"'
 	@echo 'Invoking: Arm Linker'
-	"/Applications/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/bin/armcl" -mv7M4 --code_state=16 --float_support=FPv4SPD16 -me --advice:power=all --define=__MSP432P401R__ --define=ccs --define=_USE_CLI_ -g --gcc --diag_warning=225 --diag_wrap=off --display_error_number --abi=eabi -z -m"mspCommProtocol.map" --heap_size=1024 --stack_size=512 -i"/Applications/ti/ccs1200/ccs/ccs_base/arm/include" -i"/Applications/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/lib" -i"/Applications/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/include" --reread_libs --diag_wrap=off --display_error_number --warn_sections --xml_link_info="mspCommProtocol_linkInfo.xml" --rom_model -o "mspCommProtocol.out" $(ORDERED_OBJS)
+	"/Applications/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/bin/armcl" -mv7M4 --code_state=16 --float_support=FPv4SPD16 -me --advice:power=all --define=__MSP432P401R__ --define=ccs --define=_USE_CLI_ -g --gcc --diag_warning=225 --diag_wrap=off --display_error_number --abi=eabi -z -m"msp432-endpoint.map" --heap_size=1024 --stack_size=512 -i"/Applications/ti/ccs1200/ccs/ccs_base/arm/include" -i"/Applications/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/lib" -i"/Applications/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/include" --reread_libs --diag_wrap=off --display_error_number --warn_sections --xml_link_info="msp432-endpoint_linkInfo.xml" --rom_model -o "msp432-endpoint.out" $(ORDERED_OBJS)
 	@echo 'Finished building target: "$@"'
 	@echo ' '
 
-mspCommProtocol.hex: $(EXE_OUTPUTS)
+msp432-endpoint.hex: $(EXE_OUTPUTS)
 	@echo 'Building secondary target: "$@"'
 	@echo 'Invoking: Arm Hex Utility'
-	"/Applications/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/bin/armhex" --memwidth=8 --romwidth=8 --diag_wrap=off -o "mspCommProtocol.hex" $(EXE_OUTPUTS__QUOTED)
+	"/Applications/ti/ccs1200/ccs/tools/compiler/ti-cgt-arm_20.2.6.LTS/bin/armhex" --memwidth=8 --romwidth=8 --diag_wrap=off -o "msp432-endpoint.hex" $(EXE_OUTPUTS__QUOTED)
 	@echo 'Finished building secondary target: "$@"'
 	@echo ' '
 
