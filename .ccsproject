@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<?ccsproject version="1.0"?>
+<projectOptions>
+	<ccsVersion value="11.0.0"/>
+	<deviceVariant value="MSP432P401R"/>
+	<deviceFamily value="MSP432"/>
+	<deviceEndianness value="little"/>
+	<codegenToolVersion value="20.2.5.LTS"/>
+	<isElfFormat value="true"/>
+	<linkerCommandFile value="msp432p401r.cmd"/>
+	<rts value="libc.a"/>
+	<createSlaveProjects value=""/>
+	<templateProperties value="id=CC3100BOOST_MQTT-TwitterLED_MSP432P401R.projectspec.CC3100BOOST_MQTT-TwitterLED_MSP432P401R"/>
+	<origin value="C:\ti\msp\MSP432Ware_3_50_00_02\examples\boards\MSP-EXP432P401R\MSP-EXP432P401R_Software_Examples\Firmware\Source\CC3100BOOST_MQTT-TwitterLED_MSP432P401R\CCS\CC3100BOOST_MQTT-TwitterLED_MSP432P401R.projectspec"/>
+	<filesToOpen value="main.c,README.txt"/>
+	<connection value="common/targetdb/connections/TIXDS110_Connection.xml"/>
+	<isTargetManual value="false"/>
+</projectOptions>
