@@ -32,11 +32,16 @@
 #define MAX_SEND_RCV_SIZE   1024
 ///http end
 
+//CommProtocol
+#define HANDSHAKE_ACK  "HANDSHAKE_ACK"
+
 bool isConfigurationMode = false;
 
 //tcp var
 int sockfd, connfd, len;
 struct sockaddr_in servaddr, cli;
+int firstStart;
+
 
 /* Application specific status/error codes */
 typedef enum
@@ -148,9 +153,11 @@ void configurationMode()
 
     while (status != sizeof(buff))
     {
-        do{
+        do
+        {
             status = sl_Recv(connfd, buff, sizeof(buff), 0);
-        }while(status == SL_EAGAIN);
+        }
+        while (status == SL_EAGAIN);
         char bf[100];
         sprintf(bf, "\nReceived packets (%d bytes) successfully\n\r", status);
         CLI_Write(bf);
@@ -162,7 +169,7 @@ void configurationMode()
         }
         else if (status == sizeof(buff))
         {
-            sl_Send(connfd, "MSP432_ACK", 11, 0);
+            sl_Send(connfd, HANDSHAKE_ACK, sizeof(HANDSHAKE_ACK), 0);
         }
     }
     char tmp[100] = "";
@@ -181,6 +188,117 @@ void configurationMode()
 
 }
 
+int communicationRoutine()
+{
+    int retVal;
+    displayBanner();
+
+    /*
+     * Following function configures the device to default state by cleaning
+     * the persistent settings stored in NVMEM (viz. connection profiles &
+     * policies, power policy etc)
+     *
+     * Applications may choose to skip this step if the developer is sure
+     * that the device is in its default state at start of application
+     *
+     * Note that all profiles and persistent settings that were done on the
+     * device will be lost
+     */
+
+    if (firstStart)
+    {
+        retVal = configureSimpleLinkToDefaultState();
+        if (retVal < 0)
+        {
+            if (DEVICE_NOT_IN_STATION_MODE == retVal)
+                CLI_Write(
+                        " Failed to configure the device in its default state \n\r");
+            LOOP_FOREVER();
+        }
+
+        CLI_Write(" Device is configured in default state \n\r");
+
+        /*
+         * Assumption is that the device is configured in station mode already
+         * and it is in its default state
+         */
+        retVal = sl_Start(0, 0, 0);
+        if ((retVal < 0) || (ROLE_STA != retVal))
+        {
+            CLI_Write(" Failed to start the device \n\r");
+            LOOP_FOREVER();
+        }
+        CLI_Write(" Device started as STATION \n\r");
+        firstStart = false;
+    }
+    else
+        close(sockfd);
+
+    /* Connecting to WLAN AP */
+    retVal = establishConnectionWithAP();
+    if (retVal < 0)
+    {
+        CLI_Write(" Failed to establish connection w/ an AP \n\r");
+        LOOP_FOREVER();
+    }
+
+    CLI_Write(" Connection established w/ AP and IP is acquired \n\r");
+
+    //close socket if not first start
+//            if (!firstStart)
+//                close(sockfd);
+
+    // socket create and verification
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (sockfd == -1)
+    {
+        CLI_Write("socket creation failed...\n");
+        exit(0);
+    }
+    else
+        CLI_Write("Socket successfully created..\n");
+
+    SlSockNonblocking_t enableOption;
+    enableOption.NonblockingEnabled = 1;
+    sl_SetSockOpt(sockfd, SL_SOL_SOCKET, SL_SO_NONBLOCKING,
+                  (_u8*) &enableOption, sizeof(enableOption)); // Enable/disable nonblocking mode
+
+    bzero(&servaddr, sizeof(servaddr));
+
+    // assign IP, PORT
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    servaddr.sin_port = htons(PORT);
+
+    // Binding newly created socket to given IP and verification
+    if ((bind(sockfd, (SA*) &servaddr, sizeof(servaddr))) != 0)
+    {
+        CLI_Write("socket bind failed...\n");
+        exit(0);
+    }
+    else
+        CLI_Write("Socket successfully binded..\n");
+
+    // Now server is ready to listen and verification
+    if ((listen(sockfd, 5)) != 0)
+    {
+        CLI_Write("Listen failed...\n");
+        exit(0);
+    }
+    else
+        CLI_Write("Server listening..\n");
+    len = sizeof(cli);
+    configurationMode();
+
+    //code end
+    retVal = disconnectFromAP();
+    if (retVal < 0)
+    {
+        CLI_Write(" Failed to disconnect from the AP \n\r");
+        LOOP_FOREVER();
+    }
+}
 /*
  * Application's entry point
  */
@@ -188,10 +306,9 @@ int main(int argc, char **argv)
 {
 
     _i32 retVal = -1;
-
+    firstStart = true;
     retVal = initializeAppVariables();
     ASSERT_ON_ERROR(retVal);
-    int firstStart = true;
     /* Stop WDT and initialize the system-clock of the MCU */
     stopWDT();
     interruptSetup();
@@ -203,111 +320,7 @@ int main(int argc, char **argv)
     {
         if (isConfigurationMode)
         {
-            displayBanner();
-
-            /*
-             * Following function configures the device to default state by cleaning
-             * the persistent settings stored in NVMEM (viz. connection profiles &
-             * policies, power policy etc)
-             *
-             * Applications may choose to skip this step if the developer is sure
-             * that the device is in its default state at start of application
-             *
-             * Note that all profiles and persistent settings that were done on the
-             * device will be lost
-             */
-
-            if (firstStart)
-            {
-                retVal = configureSimpleLinkToDefaultState();
-                if (retVal < 0)
-                {
-                    if (DEVICE_NOT_IN_STATION_MODE == retVal)
-                        CLI_Write(
-                                " Failed to configure the device in its default state \n\r");
-                    LOOP_FOREVER();
-                }
-
-                CLI_Write(" Device is configured in default state \n\r");
-
-                /*
-                 * Assumption is that the device is configured in station mode already
-                 * and it is in its default state
-                 */
-                retVal = sl_Start(0, 0, 0);
-                if ((retVal < 0) || (ROLE_STA != retVal))
-                {
-                    CLI_Write(" Failed to start the device \n\r");
-                    LOOP_FOREVER();
-                }
-                CLI_Write(" Device started as STATION \n\r");
-                firstStart = false;
-            }
-
-            /* Connecting to WLAN AP */
-            retVal = establishConnectionWithAP();
-            if (retVal < 0)
-            {
-                CLI_Write(" Failed to establish connection w/ an AP \n\r");
-                LOOP_FOREVER();
-            }
-
-            CLI_Write(" Connection established w/ AP and IP is acquired \n\r");
-
-            //close socket if not first start
-            if (!firstStart)
-                close(sockfd);
-
-            // socket create and verification
-            sockfd = socket(AF_INET, SOCK_STREAM, 0);
-
-            if (sockfd == -1)
-            {
-                CLI_Write("socket creation failed...\n");
-                exit(0);
-            }
-            else
-                CLI_Write("Socket successfully created..\n");
-
-            SlSockNonblocking_t enableOption;
-            enableOption.NonblockingEnabled = 1;
-            sl_SetSockOpt(sockfd, SL_SOL_SOCKET, SL_SO_NONBLOCKING,
-                          (_u8*) &enableOption, sizeof(enableOption)); // Enable/disable nonblocking mode
-
-            bzero(&servaddr, sizeof(servaddr));
-
-            // assign IP, PORT
-            servaddr.sin_family = AF_INET;
-            servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-            servaddr.sin_port = htons(PORT);
-
-            // Binding newly created socket to given IP and verification
-            if ((bind(sockfd, (SA*) &servaddr, sizeof(servaddr))) != 0)
-            {
-                CLI_Write("socket bind failed...\n");
-                exit(0);
-            }
-            else
-                CLI_Write("Socket successfully binded..\n");
-
-            // Now server is ready to listen and verification
-            if ((listen(sockfd, 5)) != 0)
-            {
-                CLI_Write("Listen failed...\n");
-                exit(0);
-            }
-            else
-                CLI_Write("Server listening..\n");
-            len = sizeof(cli);
-            configurationMode();
-
-            //code end
-            retVal = disconnectFromAP();
-            if (retVal < 0)
-            {
-                CLI_Write(" Failed to disconnect from the AP \n\r");
-                LOOP_FOREVER();
-            }
+            communicationRoutine();
         }
         else
         {
@@ -317,7 +330,6 @@ int main(int argc, char **argv)
 
     return 0;
 }
-
 
 /*
  * STATIC FUNCTION DEFINITIONS -- End
