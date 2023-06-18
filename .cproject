@@ -44,12 +44,14 @@
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.ti.ccstudio.buildDefinitions.MSP432_20.2.compilerID.INCLUDE_PATH.1049734065" name="Add dir to #include search path (--include_path, -I)" superClass="com.ti.ccstudio.buildDefinitions.MSP432_20.2.compilerID.INCLUDE_PATH" valueType="includePath">
 									<listOptionValue builtIn="false" value="${CCS_BASE_ROOT}/arm/include"/>
+									<listOptionValue builtIn="false" value="${HOME}/ti/simplelink_msp432p4_sdk_3_40_01_02/source"/>
 									<listOptionValue builtIn="false" value="/Users/matteo/ti/simplelink_msp432p4_sdk_3_40_01_02/source/ti/posix/ccs"/>
 									<listOptionValue builtIn="false" value="${CCS_BASE_ROOT}/arm/include/CMSIS"/>
 									<listOptionValue builtIn="false" value="${PROJECT_ROOT}"/>
 									<listOptionValue builtIn="false" value="${PROJECT_LOC}"/>
 									<listOptionValue builtIn="false" value="${PROJECT_LOC}/simplelink/include"/>
 									<listOptionValue builtIn="false" value="${PROJECT_LOC}/simplelink/source"/>
+									<listOptionValue builtIn="false" value="${PROJECT_LOC}/NetworkUtils"/>
 									<listOptionValue builtIn="false" value="${PROJECT_LOC}/board"/>
 									<listOptionValue builtIn="false" value="${PROJECT_LOC}/cli_uart"/>
 									<listOptionValue builtIn="false" value="${PROJECT_LOC}/driverlib/MSP432P4xx"/>
@@ -85,6 +87,7 @@
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="com.ti.ccstudio.buildDefinitions.MSP432_20.2.linkerID.LIBRARY.569730972" name="Include library file or command file as input (--library, -l)" superClass="com.ti.ccstudio.buildDefinitions.MSP432_20.2.linkerID.LIBRARY" useByScannerDiscovery="false" valueType="libs">
 									<listOptionValue builtIn="false" value="libc.a"/>
+									<listOptionValue builtIn="false" value="${HOME}/ti/simplelink_msp432p4_sdk_3_40_01_02/source/ti/grlib/lib/ccs/m4f/grlib.a"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="true" id="com.ti.ccstudio.buildDefinitions.MSP432_20.2.linkerID.PREFERRED_ORDER.752424441" name="Add &lt;function&gt; to preferred placement order list (--preferred_order)" superClass="com.ti.ccstudio.buildDefinitions.MSP432_20.2.linkerID.PREFERRED_ORDER" valueType="stringList"/>
 								<inputType id="com.ti.ccstudio.buildDefinitions.MSP432_20.2.exeLinker.inputType__CMD_SRCS.1053325760" name="Linker Command Files" superClass="com.ti.ccstudio.buildDefinitions.MSP432_20.2.exeLinker.inputType__CMD_SRCS"/>
