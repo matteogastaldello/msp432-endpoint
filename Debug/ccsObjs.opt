@@ -1,6 +1,10 @@
 "./main.obj"
 "./startup_msp432p401r_ccs.obj"
 "./system_msp432p401r.obj"
+"./HAL/HAL_I2C.obj"
+"./HAL/HAL_TMP006.obj"
+"./LcdDriver/Crystalfontz128x128_ST7735.obj"
+"./LcdDriver/HAL_MSP_EXP432P401R_Crystalfontz128x128_ST7735.obj"
 "./board/board.obj"
 "./cli_uart/cli_uart.obj"
 "./driverlib/MSP432P4xx/adc14.obj"
@@ -49,3 +53,4 @@
 "./uart_cc3100/uart_cc3100.obj"
 "../msp432p401r.cmd"
 -llibc.a
+-l"/Users/matteo/ti/simplelink_msp432p4_sdk_3_40_01_02/source/ti/grlib/lib/ccs/m4f/grlib.a"

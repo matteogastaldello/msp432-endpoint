@@ -10,10 +10,30 @@
 #include <socket.h>
 #include <sys/types.h>
 #include <unistd.h> // read(), write(), close()
+
 #include <driverlib.h>
+//LcdDriver
+#include <msp.h>
+#include <ti/grlib/grlib.h>
+#include "LcdDriver/Crystalfontz128x128_ST7735.h"
+#include "LcdDriver/HAL_MSP_EXP432P401R_Crystalfontz128x128_ST7735.h"
+#include "HAL/HAL_I2C.h"
+#include "HAL/HAL_TMP006.h"
+#include <stdio.h>
+#include <string.h>
+
+//COMMUNICATION
 #define MAX 80
 #define PORT 8080
 #define SA struct sockaddr
+//CommProtocol
+#define HANDSHAKE_ACK  "HANDSHAKE_ACK"
+
+//LCD
+#define SELECTED_COLOR 25500
+#define MENU_SIZE 3
+#define INTERFACES_DIM_MAX 5
+#define DATA_BUFFER_DIM 10
 
 /*
  * Values for below macros shall be modified per the access-point's (AP) properties
@@ -30,18 +50,627 @@
 #define SMALL_BUF           32
 #define MAX_SEND_BUF_SIZE   512
 #define MAX_SEND_RCV_SIZE   1024
-///http end
 
-//CommProtocol
-#define HANDSHAKE_ACK  "HANDSHAKE_ACK"
+
 
 bool isConfigurationMode = false;
-
 //tcp var
 int sockfd, connfd, len;
 struct sockaddr_in servaddr, cli;
 int firstStart;
 
+
+/*
+ * STATIC FUNCTION DEFINITIONS -- Start
+ */
+static _i32 establishConnectionWithAP();
+static _i32 disconnectFromAP();
+static _i32 configureSimpleLinkToDefaultState();
+static _i32 initializeAppVariables();
+static void displayBanner();
+static _i32 getHostIP();
+static _i32 createConnection();
+
+char* itoa(int n, char *s)
+{
+    int i, sign;
+
+    if ((sign = n) < 0) /* tiene traccia del segno */
+        n = -n; /* rende n positivo */
+    i = 0;
+    do
+    { /* genera le cifre nell'ordine inverso */
+        s[i++] = n % 10 + '0'; /* estrae la cifra seguente */
+    }
+    while ((n /= 10) > 0); /* elimina la cifra da n */
+    if (sign < 0)
+        s[i++] = '-';
+    s[i] = '\0';
+    //reverse(s);
+
+    return s;
+}
+
+typedef struct
+{
+    int currentPos;
+    float bufferData[DATA_BUFFER_DIM];
+} Data_t;
+
+Data_t tempData;
+
+int back = 0;
+int pressed = 0;
+int currentState;
+int selectedElement = 0;
+int samplingStop;
+int rerender;
+
+/* Graphic library context */
+Graphics_Context g_sContext;
+
+/* ADC results buffer */
+static uint16_t resultsBuffer[2];
+
+typedef void (*behaviour_t)();
+
+typedef struct
+{
+    // element selection
+    int selectedElement;
+    int (*selectionFunction)();
+
+    // interfaces handling
+    int interfacesDim;
+    int selectedInterface;
+    void (*interfaces[INTERFACES_DIM_MAX])();
+
+    // behaviour
+    behaviour_t behaviours[INTERFACES_DIM_MAX];
+
+} State_t;
+
+State_t states[4];
+Graphics_Rectangle menuRectangles[MENU_SIZE];
+
+int communicationRoutine();
+
+//-------------------------------------MENU STATE----------------------------
+
+void menuRectanglesInit()
+{
+
+    int height = 30;
+    int space = 10;
+
+//       Graphics_Rectangle choice0;  // pairing state
+//       choice0.xMin = 10;
+//       choice0.xMax = 128-choice0.xMin;
+//       choice0.yMin = 10;
+//       choice0.yMax = choice0.yMin + height;
+
+//      Graphics_Rectangle choice1;  // normal mode
+//      choice1.xMin = choice0.xMin;
+//      choice1.xMax = choice0.xMax;
+//      choice1.yMin = choice0.yMax + space;
+//      choice1.yMax = choice1.yMin + height;
+
+//       Graphics_Rectangle choice2;  // communication mode
+//       choice2.xMin = choice0.xMin;
+//       choice2.xMax = choice0.xMax;
+//       choice2.yMin = choice1.yMax + space;
+//       choice2.yMax = choice2.yMin + height;
+
+//       menuRectangles[0] = choice0;
+//       menuRectangles[1] = choice1;
+//       menuRectangles[2] = choice2;
+
+    menuRectangles[0].xMin = 5;
+    menuRectangles[0].xMax = 128 - menuRectangles[0].xMin;
+    menuRectangles[0].yMin = 5;
+    menuRectangles[0].yMax = menuRectangles[0].yMin + height;
+
+    menuRectangles[1].xMin = menuRectangles[0].xMin;
+    menuRectangles[1].xMax = menuRectangles[0].xMax;
+    menuRectangles[1].yMin = menuRectangles[0].yMax + space;
+    menuRectangles[1].yMax = menuRectangles[1].yMin + height;
+
+    menuRectangles[2].xMin = menuRectangles[0].xMin;
+    menuRectangles[2].xMax = menuRectangles[0].xMax;
+    menuRectangles[2].yMin = menuRectangles[1].yMax + space;
+    menuRectangles[2].yMax = menuRectangles[2].yMin + height;
+
+}
+
+void menuInterfaceRender()
+{
+    Graphics_clearDisplay(&g_sContext);
+
+    int i = 0;
+
+    for (i; i < MENU_SIZE; i++)
+    {
+        Graphics_drawRectangle(&g_sContext, &menuRectangles[i]);
+    }
+
+    Graphics_fillRectangle(&g_sContext, &menuRectangles[selectedElement]);
+
+    Graphics_drawStringCentered(
+            &g_sContext, (int8_t*) "PAIRING MODE", 18, 64,
+            (menuRectangles[0].yMax + menuRectangles[0].yMin) / 2, OPAQUE_TEXT);
+    Graphics_drawStringCentered(
+            &g_sContext, (int8_t*) "NORMAL MODE", 18, 64,
+            (menuRectangles[1].yMax + menuRectangles[1].yMin) / 2, OPAQUE_TEXT);
+    Graphics_drawStringCentered(
+            &g_sContext, (int8_t*) "COMMUNICATION MODE", 18, 64,
+            (menuRectangles[2].yMax + menuRectangles[2].yMin) / 2, OPAQUE_TEXT);
+
+}
+
+void menuStateBehaviour()
+{
+
+    //menuInterfaceRender();
+
+}
+
+int menuSelectionFunction()
+{
+    //char string[30];
+
+    //renderStop = 0;
+    int intermediateValue;
+
+    if (samplingStop == 0)
+    {
+        if (resultsBuffer[1] > 16330)    // joystick turned up
+        {
+            selectedElement--;
+            samplingStop = 1;
+            rerender = 1;
+
+        }
+        else if (resultsBuffer[1] < 50)    // joystick turned down
+        {
+            selectedElement++;
+            samplingStop = 1;
+            rerender = 1;
+            //Graphics_drawStringCentered(&g_sContext,(int8_t *)string,18,64,50,OPAQUE_TEXT);
+
+        }
+
+        if (selectedElement < 0)
+        {
+            selectedElement = MENU_SIZE + selectedElement;
+        }
+
+        intermediateValue = selectedElement % MENU_SIZE;
+        selectedElement = intermediateValue % MENU_SIZE;
+
+        //sprintf(string, "SElem : %d",selectedElement);
+        //Graphics_drawStringCentered(&g_sContext,(int8_t *)string,30,64,50,OPAQUE_TEXT);
+
+        int i = 0;
+        for (i; i < 300250; i++)
+            ;   // busy wait per scandire il tempo di campionamento
+
+        //Graphics_drawStringCentered(&g_sContext,(int8_t *) itoa(selectedElement,string) ,4,64,50,OPAQUE_TEXT);
+//       if (rerender==1)
+//       {
+//           menuInterfaceRender();
+//           rerender = 0;
+//       }
+
+        if (!(P4IN & GPIO_PIN1) && pressed == 0)
+        {
+            //     Graphics_clearDisplay(&g_sContext);
+            //     Graphics_drawStringCentered(&g_sContext,(int8_t*) "PRESSED",7,64,64,OPAQUE_TEXT);
+            currentState = selectedElement;
+
+            pressed = 1;
+            rerender = 1;
+
+            int i = 0;
+            for (i; i < 300250; i++)
+                ;   // busy wait per scandire il tempo di campionamento
+
+            pressed = 0;
+
+            //interfacePlaceholder(); //*(states[currentState].interfaces[states[currentState].selectedInterface])();
+        }
+
+    }
+
+    samplingStop = 0;
+
+    return 0;
+}
+
+//-------------------------------------NORMAL STATE----------------------------
+
+void normalModeRender()
+{
+    Graphics_clearDisplay(&g_sContext);
+    //Graphics_drawRectangle(&g_sContext,&menuRectangles[0]);
+    /* Display temperature */
+    char string[30];
+    sprintf(string, "CURRENT : %f", tempData.bufferData[tempData.currentPos]);
+    Graphics_drawStringCentered(&g_sContext, (int8_t*) string, 11, 55, 70,
+    OPAQUE_TEXT);
+}
+
+void normalModeBehaviour()
+{
+
+    /* Obtain temperature value from TMP006 */
+    tempData.bufferData[tempData.currentPos] = TMP006_getTemp();
+    //normalModeRender(); // andr� sostituito con (*states[currenttState].interfaces[selectedInterface])();
+
+    int partialPos = tempData.currentPos++;
+    tempData.currentPos = partialPos % DATA_BUFFER_DIM;
+
+}
+
+//-------------------------------------PAIRING STATE----------------------------
+
+void pairingInterfaceRender()
+{
+    Graphics_clearDisplay(&g_sContext);
+    Graphics_drawStringCentered(&g_sContext, (int8_t*) "Pairing", 7, 64, 30,
+    OPAQUE_TEXT);
+}
+
+void pairingBehaviour()
+{
+    //(*states[currentState].interfaces[states[currentState].selectedInterface])();
+
+    // add pairing code HERE
+
+}
+
+//-------------------------------------COMMUNICATION STATE----------------------------
+
+void communicationInterfaceRender()
+{
+    Graphics_clearDisplay(&g_sContext);
+
+    char title[20];
+    sprintf(title, "%s", "COLLECTED DATA");
+
+    char dataString[60];
+    int i = 0;
+    char space[] = " ";
+
+    for (i; i < DATA_BUFFER_DIM; i++)
+    {
+        char currentData[5];
+        itoa(tempData.bufferData[0], currentData);
+        strncat(dataString, currentData, 2);
+        strncat(dataString, space, 1);
+    }
+
+    Graphics_drawStringCentered(&g_sContext, (int8_t*) title, 14, 64, 5,
+    OPAQUE_TEXT);
+    Graphics_drawStringCentered(&g_sContext, (int8_t*) dataString, 60, 64, 20,
+    OPAQUE_TEXT);
+
+}
+
+void interfacePlaceholder()
+{
+    Graphics_clearDisplay(&g_sContext);
+    Graphics_drawStringCentered(&g_sContext, (int8_t*) "INTERFACE PLACEHOLDER",
+                                21, 64, 50, OPAQUE_TEXT);
+
+}
+
+void noBehaviour()
+{
+
+    //(*states[currentState].interfaces[states[currentState].selectedInterface])();
+
+}
+
+int noSelectionFunction()
+{
+    return 0;
+}
+
+int backSelectionFunction()
+{
+    if (!(P4IN & GPIO_PIN1))
+    {
+        Graphics_clearDisplay(&g_sContext);
+        Graphics_drawStringCentered(&g_sContext, (int8_t*) "BACK FUNC", 9, 64,
+                                    10, OPAQUE_TEXT);
+        currentState = 3;
+
+        rerender = 1;
+        //interfacePlaceholder(); //*(states[currentState].interfaces[states[currentState].selectedInterface])();
+    }
+    return 0;
+}
+
+void render()
+{
+    if (rerender == 1)
+    {
+        (*states[currentState].interfaces[states[currentState].selectedInterface])();
+        rerender = 0;
+    }
+
+}
+
+void statesInitializer()
+{
+    // states are sorted thinking about the flow interactions should follow --- pairing, then collecting data, then communication to send it
+    // menu is put at the last one and will be avoided scrolling using the joystick
+
+    // states[0] initialization -- pairing state
+
+    states[0].selectedElement = -1;
+    states[0].selectionFunction = &communicationRoutine;
+    states[0].interfacesDim = 3; //pairing,paired,error
+    states[0].selectedInterface = 0;
+    states[0].interfaces[0] = &pairingInterfaceRender;           //ok
+    states[0].behaviours[0] = &pairingBehaviour;
+
+    // states[1] initialization -- normal state
+
+    states[1].selectedElement = -1;
+    states[1].selectionFunction = &noSelectionFunction;
+    states[1].interfacesDim = 1;   // mostra i dati irt
+    states[1].selectedInterface = 0;
+    states[1].interfaces[0] = &normalModeRender;
+    states[1].behaviours[0] = &normalModeBehaviour;
+
+    // states[2] initialization -- communication state
+
+    states[2].selectedElement = -1;
+    states[2].selectionFunction = &noSelectionFunction;
+    states[2].interfacesDim = 3; // sending, ok,error
+    states[2].selectedInterface = 0;
+    states[2].interfaces[0] = &communicationInterfaceRender;            //ok
+    states[2].behaviours[0] = &noBehaviour;
+
+    // states[3] initialization -- menu state
+
+    states[3].selectedElement = 0;
+    states[3].selectionFunction = &menuSelectionFunction;
+    states[3].interfacesDim = 1; // 1 per ogni rettangolo selezionabile
+    states[3].selectedInterface = 0;
+    states[3].interfaces[0] = &menuInterfaceRender;         //ok
+    states[3].behaviours[0] = &menuStateBehaviour;
+}
+
+void _adcInit()
+{
+    /* Configures Pin 6.0 and 4.4 as ADC input */
+    GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P6, GPIO_PIN0,
+    GPIO_TERTIARY_MODULE_FUNCTION);
+    GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P4, GPIO_PIN4,
+    GPIO_TERTIARY_MODULE_FUNCTION);
+
+    /* Initializing ADC (ADCOSC/64/8) */
+    ADC14_enableModule();
+    ADC14_initModule(ADC_CLOCKSOURCE_ADCOSC, ADC_PREDIVIDER_64, ADC_DIVIDER_8,
+                     0);
+
+    /* Configuring ADC Memory (ADC_MEM0 - ADC_MEM1 (A15, A9)  with repeat)
+     * with internal 2.5v reference */
+    ADC14_configureMultiSequenceMode(ADC_MEM0, ADC_MEM1, true);
+    ADC14_configureConversionMemory(ADC_MEM0,
+    ADC_VREFPOS_AVCC_VREFNEG_VSS,
+                                    ADC_INPUT_A15, ADC_NONDIFFERENTIAL_INPUTS);
+
+    ADC14_configureConversionMemory(ADC_MEM1,
+    ADC_VREFPOS_AVCC_VREFNEG_VSS,
+                                    ADC_INPUT_A9, ADC_NONDIFFERENTIAL_INPUTS);
+
+    /* Enabling the interrupt when a conversion on channel 1 (end of sequence)
+     *  is complete and enabling conversions */
+    ADC14_enableInterrupt(ADC_INT1);
+
+    /* Enabling Interrupts */
+    Interrupt_enableInterrupt(INT_ADC14);
+    Interrupt_enableMaster();
+
+    /* Setting up the sample timer to automatically step through the sequence
+     * convert.
+     */
+    ADC14_enableSampleTimer(ADC_AUTOMATIC_ITERATION);
+
+    /* Triggering the start of the sample */
+    ADC14_enableConversion();
+    ADC14_toggleConversionTrigger();
+}
+
+void _graphicsInit()
+{
+    /* Initializes display */
+    Crystalfontz128x128_Init();
+
+    /* Set default screen orientation */
+    Crystalfontz128x128_SetOrientation(LCD_ORIENTATION_UP);
+
+    /* Initializes graphics context */
+    Graphics_initContext(&g_sContext, &g_sCrystalfontz128x128,
+                         &g_sCrystalfontz128x128_funcs);
+    Graphics_setForegroundColor(&g_sContext, GRAPHICS_COLOR_RED);
+    Graphics_setBackgroundColor(&g_sContext, GRAPHICS_COLOR_WHITE);
+    GrContextFontSet(&g_sContext, &g_sFontFixed6x8);
+    Graphics_clearDisplay(&g_sContext);
+
+}
+
+//void _lightSensorInit()
+//{
+//    /* Initialize I2C communication */
+//    Init_I2C_GPIO();
+//    I2C_init();
+//
+//    /* Initialize OPT3001 digital ambient light sensor */
+//    OPT3001_init();
+//
+//    __delay_cycles(100000);
+//
+//}
+
+void _temperatureSensorInit()
+{
+    /* Temperature Sensor initialization */
+    /* Initialize I2C communication */
+    Init_I2C_GPIO();
+    I2C_init();
+    /* Initialize TMP006 temperature sensor */
+    TMP006_init();
+    __delay_cycles(100000);
+
+}
+
+void _hwInit()
+{
+    /* Halting WDT and disabling master interrupts */
+    WDT_A_holdTimer();
+    Interrupt_disableMaster();
+
+    /* Set the core voltage level to VCORE1 */
+    PCM_setCoreVoltageLevel(PCM_VCORE1);
+
+    /* Set 2 flash wait states for Flash bank 0 and 1*/
+    FlashCtl_setWaitState(FLASH_BANK0, 2);
+    FlashCtl_setWaitState(FLASH_BANK1, 2);
+
+    /* Initializes Clock System */
+    CS_setDCOCenteredFrequency(CS_DCO_FREQUENCY_48);
+    CS_initClockSignal(CS_MCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
+    CS_initClockSignal(CS_HSMCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
+    CS_initClockSignal(CS_SMCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
+    CS_initClockSignal(CS_ACLK, CS_REFOCLK_SELECT, CS_CLOCK_DIVIDER_1);
+
+    _graphicsInit();
+    _adcInit();
+    //_temperatureSensorInit();
+
+    menuRectanglesInit();
+    statesInitializer();
+//
+//
+//
+//
+//
+    tempData.currentPos = 0;
+
+    int i = 0;
+
+    for (i; i < DATA_BUFFER_DIM; i++)
+    {
+        tempData.bufferData[i] = 0;
+    }
+//
+////    _lightSensorInit();
+//
+    //COME SARA ' :
+    currentState = 3; // at init time starts form menuState
+    rerender = 1;
+    samplingStop = 0;
+
+//
+//    // TEST
+//
+
+}
+
+/*
+ * Main function
+ */
+int main(void)
+{
+
+    _hwInit();
+
+    _i32 retVal = -1;
+    firstStart = true;
+    retVal = initializeAppVariables();
+    ASSERT_ON_ERROR(retVal);
+    /* Stop WDT and initialize the system-clock of the MCU */
+    stopWDT();
+    interruptSetup();
+    initClk();
+    /* Configure command line interface */
+    CLI_Configure();
+
+    while (1)
+    {
+
+    }
+
+    return 0;
+
+//    //Graphics_drawStringCentered(&g_sContext,(int8_t*)"EHI",3,64,64,OPAQUE_TEXT);
+//
+//
+//    while(1)
+//    {
+//        //render();
+//        //(*states[currentState].behaviours[0])();
+//    }
+
+    //menuInterfaceRender();
+    //menuStateBehaviour();
+
+//    while (1)
+//    {
+//        int i = 0;
+//        __delay_cycles(100000);
+//        pairingViewDynamic(pos);
+//        for(i ; i<20000;i++);
+//        pos++;
+//
+//    }
+
+}
+
+//        while (1)
+//        {
+//            /* Obtain lux value from OPT3001 */
+//            lux = OPT3001_getLux();
+//
+//            char string[20];
+//            sprintf(string, "%f", lux);
+//            Graphics_drawStringCentered(&g_sContext, (int8_t *) string, 6, 48, 70,
+//            OPAQUE_TEXT);
+//
+//            sprintf(string, "lux");
+//            Graphics_drawStringCentered(&g_sContext, (int8_t *) string, 3, 86, 70,
+//            OPAQUE
+//        }
+
+void ADC14_IRQHandler(void)
+{
+    uint64_t status;
+
+    status = ADC14_getEnabledInterruptStatus();
+    ADC14_clearInterruptFlag(status);
+
+    /* ADC_MEM1 conversion completed */
+    if (status & ADC_INT1)
+    {
+        /* Store ADC14 conversion results */
+        resultsBuffer[0] = ADC14_getResult(ADC_MEM0);
+        resultsBuffer[1] = ADC14_getResult(ADC_MEM1);
+
+        (*states[currentState].selectionFunction)();
+        render();
+        //menuSelectionFunction();
+
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+//CODICE DI COMUNICAZIONE
+
+//WIFI UITLS HEADERS
 
 /* Application specific status/error codes */
 typedef enum
@@ -65,20 +694,7 @@ struct
     _i16 SockID;
 } g_AppData;
 
-/*
- * GLOBAL VARIABLES -- End
- */
 
-/*
- * STATIC FUNCTION DEFINITIONS -- Start
- */
-static _i32 establishConnectionWithAP();
-static _i32 disconnectFromAP();
-static _i32 configureSimpleLinkToDefaultState();
-static _i32 initializeAppVariables();
-static void displayBanner();
-static _i32 getHostIP();
-static _i32 createConnection();
 
 /* Port1 ISR */
 void PORT1_IRQHandler(void)
@@ -122,6 +738,7 @@ void interruptSetup()
 // Function designed for chat between client and server.
 void configurationMode()
 {
+    CLI_Write("Conf Mode...\n");
 
     // Accept the data packet from client and verification
     connfd = SL_EAGAIN;
@@ -192,9 +809,19 @@ int communicationRoutine()
 {
     int retVal;
     displayBanner();
-
+    if (isConfigurationMode)
+    {
+        isConfigurationMode = false;
+        CLI_Write(
+                "Returning to default state, configuration mode deactivated\n");
+    }
+    else
+    {
+        CLI_Write("Changing to Configuration Mode\n");
+        isConfigurationMode = true;
+    }
     /*
-     * Following function configures the device to default state by cleaning
+     * Following function configures the dxevice to default state by cleaning
      * the persistent settings stored in NVMEM (viz. connection profiles &
      * policies, power policy etc)
      *
@@ -289,6 +916,8 @@ int communicationRoutine()
     else
         CLI_Write("Server listening..\n");
     len = sizeof(cli);
+
+    //Function used to receive data from other devices
     configurationMode();
 
     //code end
@@ -299,37 +928,9 @@ int communicationRoutine()
         LOOP_FOREVER();
     }
 }
-/*
- * Application's entry point
- */
-int main(int argc, char **argv)
-{
 
-    _i32 retVal = -1;
-    firstStart = true;
-    retVal = initializeAppVariables();
-    ASSERT_ON_ERROR(retVal);
-    /* Stop WDT and initialize the system-clock of the MCU */
-    stopWDT();
-    interruptSetup();
-    initClk();
-    /* Configure command line interface */
-    CLI_Configure();
 
-    while (1)
-    {
-        if (isConfigurationMode)
-        {
-            communicationRoutine();
-        }
-        else
-        {
-            CLI_Write("Normal Mode\n");
-        }
-    }
-
-    return 0;
-}
+//WIFI UTILS
 
 /*
  * STATIC FUNCTION DEFINITIONS -- End
