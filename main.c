@@ -19,6 +19,7 @@
 #include "LcdDriver/HAL_MSP_EXP432P401R_Crystalfontz128x128_ST7735.h"
 #include "HAL/HAL_I2C.h"
 #include "HAL/HAL_TMP006.h"
+#include "HAL/HAL_OPT3001.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -39,9 +40,9 @@
  * Values for below macros shall be modified per the access-point's (AP) properties
  * SimpleLink device will connect to following AP when the application is executed
  */
-#define SSID_NAME       "MspNet"       /* Access point name to connect to. */
-#define SEC_TYPE        SL_SEC_TYPE_WPA_WPA2     /* Security type of the Access piont */
-#define PASSKEY         "mspmatteo"   /* Password in case of secure AP */
+#define SSID_NAME       "SabeFi"       /* Access point name to connect to. */
+#define SEC_TYPE        SL_SEC_TYPE_WPA_WPA2     /* Security type of the Access point */
+#define PASSKEY         "connettiti1234"   /* Password in case of secure AP */
 #define PASSKEY_LEN     pal_Strlen(PASSKEY)      /* Password length in case of secure AP */
 
 #define APPLICATION_VERSION "1.0.0"
@@ -71,25 +72,6 @@ static void displayBanner();
 static _i32 getHostIP();
 static _i32 createConnection();
 
-char* itoa(int n, char *s)
-{
-    int i, sign;
-
-    if ((sign = n) < 0) /* tiene traccia del segno */
-        n = -n; /* rende n positivo */
-    i = 0;
-    do
-    { /* genera le cifre nell'ordine inverso */
-        s[i++] = n % 10 + '0'; /* estrae la cifra seguente */
-    }
-    while ((n /= 10) > 0); /* elimina la cifra da n */
-    if (sign < 0)
-        s[i++] = '-';
-    s[i] = '\0';
-    //reverse(s);
-
-    return s;
-}
 
 typedef struct
 {
@@ -98,8 +80,11 @@ typedef struct
 } Data_t;
 
 Data_t tempData;
+Data_t luxData;
 
+int ADC14enabled = 0;
 int back = 0;
+int dataPos = 0;
 int pressed = 0;
 int currentState;
 int selectedElement = 0;
@@ -112,8 +97,11 @@ Graphics_Context g_sContext;
 /* ADC results buffer */
 static uint16_t resultsBuffer[2];
 
+//definig a pointer to void function not receiving parameters as behaviour_t
 typedef void (*behaviour_t)();
 
+//defining state_t type which will contain all the characterizing elements of each state the machine can be into.
+//this provides a sort of encapsulation for the elements we will work with
 typedef struct
 {
     // element selection
@@ -130,8 +118,9 @@ typedef struct
 
 } State_t;
 
-State_t states[4];
-Graphics_Rectangle menuRectangles[MENU_SIZE];
+State_t states[4];  //the array of states the machine will move into
+Graphics_Rectangle menuRectangles[MENU_SIZE];   //array of rectangles that contains a rectangle for each state the machine can fall into.
+                                                //these will be displayed into the menu state
 
 int communicationRoutine();
 
@@ -142,46 +131,45 @@ void menuRectanglesInit()
 
     int height = 30;
     int space = 10;
+    int i = 0;
 
-//       Graphics_Rectangle choice0;  // pairing state
-//       choice0.xMin = 10;
-//       choice0.xMax = 128-choice0.xMin;
-//       choice0.yMin = 10;
-//       choice0.yMax = choice0.yMin + height;
+    int XMIN = 5;
+    int XMAX = 128-XMIN;
+    int YMIN = 5;
 
-//      Graphics_Rectangle choice1;  // normal mode
-//      choice1.xMin = choice0.xMin;
-//      choice1.xMax = choice0.xMax;
-//      choice1.yMin = choice0.yMax + space;
-//      choice1.yMax = choice1.yMin + height;
+    for(i ; i<MENU_SIZE;i++)
+    {
+        menuRectangles[i].xMin=XMIN;
+        menuRectangles[i].xMax=XMAX;
+        menuRectangles[i].yMin=YMIN+i*space+i*height;
+        menuRectangles[i].yMax=menuRectangles[i].yMin+height;
+    }
 
-//       Graphics_Rectangle choice2;  // communication mode
-//       choice2.xMin = choice0.xMin;
-//       choice2.xMax = choice0.xMax;
-//       choice2.yMin = choice1.yMax + space;
-//       choice2.yMax = choice2.yMin + height;
-
-//       menuRectangles[0] = choice0;
-//       menuRectangles[1] = choice1;
-//       menuRectangles[2] = choice2;
-
-    menuRectangles[0].xMin = 5;
-    menuRectangles[0].xMax = 128 - menuRectangles[0].xMin;
-    menuRectangles[0].yMin = 5;
-    menuRectangles[0].yMax = menuRectangles[0].yMin + height;
-
-    menuRectangles[1].xMin = menuRectangles[0].xMin;
-    menuRectangles[1].xMax = menuRectangles[0].xMax;
-    menuRectangles[1].yMin = menuRectangles[0].yMax + space;
-    menuRectangles[1].yMax = menuRectangles[1].yMin + height;
-
-    menuRectangles[2].xMin = menuRectangles[0].xMin;
-    menuRectangles[2].xMax = menuRectangles[0].xMax;
-    menuRectangles[2].yMin = menuRectangles[1].yMax + space;
-    menuRectangles[2].yMax = menuRectangles[2].yMin + height;
+//    menuRectangles[0].xMin = 5;
+//    menuRectangles[0].xMax = 128 - menuRectangles[0].xMin;
+//    menuRectangles[0].yMin = 5;
+//    menuRectangles[0].yMax = menuRectangles[0].yMin + height;
+//
+//    menuRectangles[1].xMin = menuRectangles[0].xMin;
+//    menuRectangles[1].xMax = menuRectangles[0].xMax;
+//    menuRectangles[1].yMin = menuRectangles[0].yMax + space;
+//    menuRectangles[1].yMax = menuRectangles[1].yMin + height;
+//
+//    menuRectangles[2].xMin = menuRectangles[0].xMin;
+//    menuRectangles[2].xMax = menuRectangles[0].xMax;
+//    menuRectangles[2].yMin = menuRectangles[1].yMax + space;
+//    menuRectangles[2].yMax = menuRectangles[2].yMin + height;
 
 }
 
+
+//*****************************************************************************
+//
+// this function takes care of the operation of rendering on the lcd display the menu interface
+// it first clears the display then draws the rectangle of each choice
+// and finally fills the one the current choice is on
+//
+//*****************************************************************************
 void menuInterfaceRender()
 {
     Graphics_clearDisplay(&g_sContext);
@@ -207,6 +195,14 @@ void menuInterfaceRender()
 
 }
 
+
+//*****************************************************************************
+//
+// this function contains the behaviour the machine will do in menu state behaviour
+// It's currently empty because all the actions in that state is handled
+//by menuSelectionFunction
+//
+//*****************************************************************************
 void menuStateBehaviour()
 {
 
@@ -214,11 +210,15 @@ void menuStateBehaviour()
 
 }
 
+//*****************************************************************************
+//
+// this function contains the selectionfunction the machine will do in menu state behaviour
+// it handles the joystick sampling results and behaves upon them
+//
+//*****************************************************************************
 int menuSelectionFunction()
 {
-    //char string[30];
 
-    //renderStop = 0;
     int intermediateValue;
 
     if (samplingStop == 0)
@@ -235,7 +235,6 @@ int menuSelectionFunction()
             selectedElement++;
             samplingStop = 1;
             rerender = 1;
-            //Graphics_drawStringCentered(&g_sContext,(int8_t *)string,18,64,50,OPAQUE_TEXT);
 
         }
 
@@ -247,36 +246,25 @@ int menuSelectionFunction()
         intermediateValue = selectedElement % MENU_SIZE;
         selectedElement = intermediateValue % MENU_SIZE;
 
-        //sprintf(string, "SElem : %d",selectedElement);
-        //Graphics_drawStringCentered(&g_sContext,(int8_t *)string,30,64,50,OPAQUE_TEXT);
-
         int i = 0;
-        for (i; i < 300250; i++)
-            ;   // busy wait per scandire il tempo di campionamento
+        for (i; i < 300250; i++);   // busy wait just to let some time pass before the new sample is taken
 
-        //Graphics_drawStringCentered(&g_sContext,(int8_t *) itoa(selectedElement,string) ,4,64,50,OPAQUE_TEXT);
-//       if (rerender==1)
-//       {
-//           menuInterfaceRender();
-//           rerender = 0;
-//       }
 
         if (!(P4IN & GPIO_PIN1) && pressed == 0)
         {
-            //     Graphics_clearDisplay(&g_sContext);
-            //     Graphics_drawStringCentered(&g_sContext,(int8_t*) "PRESSED",7,64,64,OPAQUE_TEXT);
-            currentState = selectedElement;
-
             pressed = 1;
             rerender = 1;
 
             int i = 0;
-            for (i; i < 300250; i++)
-                ;   // busy wait per scandire il tempo di campionamento
+            for (i; i < 300250; i++);   // busy wait just to let some time pass before the new sample is taken
 
             pressed = 0;
 
-            //interfacePlaceholder(); //*(states[currentState].interfaces[states[currentState].selectedInterface])();
+
+            currentState = selectedElement;
+            ADC14enabled = 0;
+
+
         }
 
     }
@@ -288,41 +276,108 @@ int menuSelectionFunction()
 
 //-------------------------------------NORMAL STATE----------------------------
 
+
+
+//*****************************************************************************
+//
+// this function takes care of the operation of rendering on the lcd display the data being sensed by the board
+// it first clears the display then draws writes the most recent measured data for each of the involved sensors
+//
+//*****************************************************************************
 void normalModeRender()
 {
     Graphics_clearDisplay(&g_sContext);
     //Graphics_drawRectangle(&g_sContext,&menuRectangles[0]);
     /* Display temperature */
-    char string[30];
-    sprintf(string, "CURRENT : %f", tempData.bufferData[tempData.currentPos]);
-    Graphics_drawStringCentered(&g_sContext, (int8_t*) string, 11, 55, 70,
+    char tempString[30];
+    char luxString[30];
+
+    sprintf(tempString, "TEMP: %f", tempData.bufferData[tempData.currentPos]);
+    Graphics_drawStringCentered(&g_sContext, (int8_t*) tempString, 11, 55, 40,
     OPAQUE_TEXT);
+
+    sprintf(luxString, "LUX: %f", luxData.bufferData[luxData.currentPos]);
+    Graphics_drawStringCentered(&g_sContext, (int8_t*) luxString, 11, 55, 60,
+        OPAQUE_TEXT);
+
+
+
 }
 
+//*****************************************************************************
+//
+// this function sets the beahviour for the board in normalMode
+// it retrievs a data from each of the active sensors then it stores it in a dedicated buffer
+// inside a struct and also changes in a circular way a variable linked to the position
+// of the data inside the mentioned buffer
+//
+//*****************************************************************************
 void normalModeBehaviour()
 {
 
-    /* Obtain temperature value from TMP006 */
-    tempData.bufferData[tempData.currentPos] = TMP006_getTemp();
-    //normalModeRender(); // andr� sostituito con (*states[currenttState].interfaces[selectedInterface])();
 
-    int partialPos = tempData.currentPos++;
-    tempData.currentPos = partialPos % DATA_BUFFER_DIM;
+    float currentLuxData = OPT3001_getLux();
+    luxData.bufferData[luxData.currentPos] = currentLuxData;
+    int luxPartialPos = luxData.currentPos +1;
+    luxData.currentPos = luxPartialPos % DATA_BUFFER_DIM;
+
+    /* Obtain temperature value from TMP006 */
+    float tempIntermediate = TMP006_getTemp();
+
+
+    tempIntermediate  = tempIntermediate - 32;
+    tempData.bufferData[tempData.currentPos] = tempIntermediate * 5/9;
+
+    int tempPartialPos = tempData.currentPos +1;//tempData.currentPos++;
+    tempData.currentPos = tempPartialPos % DATA_BUFFER_DIM;
+
+
+    rerender = 1;
 
 }
 
 //-------------------------------------PAIRING STATE----------------------------
 
+
+//*****************************************************************************
+//
+// this function takes care of rendering the interface of pairing state when the
+// board is in pairing state. It first clears the display then shows a string
+//
+//*****************************************************************************
 void pairingInterfaceRender()
 {
     Graphics_clearDisplay(&g_sContext);
     Graphics_drawStringCentered(&g_sContext, (int8_t*) "Pairing", 7, 64, 30,
     OPAQUE_TEXT);
+    rerender = 0;
 }
 
+//*****************************************************************************
+//
+// this function takes care of rendering the interface of pairing state when the
+// board is in pairing state. It first clears the display then shows a string
+//
+//*****************************************************************************
+void pairedInterfaceRender()
+{
+    Graphics_clearDisplay(&g_sContext);
+    Graphics_drawStringCentered(&g_sContext, (int8_t*) "Paired", 7, 64, 30,OPAQUE_TEXT);
+    rerender = 0;
+}
+
+//*****************************************************************************
+//
+// this function contains the behaviour the board follows when in pairing state.
+//
+//
+//*****************************************************************************
 void pairingBehaviour()
 {
     //(*states[currentState].interfaces[states[currentState].selectedInterface])();
+
+
+
 
     // add pairing code HERE
 
@@ -330,32 +385,107 @@ void pairingBehaviour()
 
 //-------------------------------------COMMUNICATION STATE----------------------------
 
+
 void communicationInterfaceRender()
 {
     Graphics_clearDisplay(&g_sContext);
 
     char title[20];
     sprintf(title, "%s", "COLLECTED DATA");
+    Graphics_drawStringCentered(&g_sContext, (int8_t*) title, 14, 64, 5,OPAQUE_TEXT);
 
-    char dataString[60];
+
+
+    char dataString[10];
     int i = 0;
-    char space[] = " ";
+    //char space[] = " ";
 
     for (i; i < DATA_BUFFER_DIM; i++)
     {
-        char currentData[5];
-        itoa(tempData.bufferData[0], currentData);
-        strncat(dataString, currentData, 2);
-        strncat(dataString, space, 1);
+//        char currentData[5];
+//        itoa(tempData.bufferData[0], currentData);
+//        strncat(dataString, currentData, 2);
+//        strncat(dataString, space, 1);
+
+        sprintf(dataString,"%f",tempData.bufferData[i]);
+        Graphics_drawStringCentered(&g_sContext, (int8_t*) dataString,10, 64, 20+i*10,OPAQUE_TEXT);
     }
 
-    Graphics_drawStringCentered(&g_sContext, (int8_t*) title, 14, 64, 5,
-    OPAQUE_TEXT);
-    Graphics_drawStringCentered(&g_sContext, (int8_t*) dataString, 60, 64, 20,
-    OPAQUE_TEXT);
+    rerender = 0;
+
+
 
 }
 
+//*****************************************************************************
+//
+// this function shows the latest collected data from the temperature sensor mounted into the board
+//
+//*****************************************************************************
+void tempDataInterface()
+{
+    Graphics_clearDisplay(&g_sContext);
+
+       char title[20];
+       sprintf(title, "%s", "COLLECTED DATA-TEMP");
+       Graphics_drawStringCentered(&g_sContext, (int8_t*) title, 19, 64, 5,OPAQUE_TEXT);
+
+
+
+       char dataString[10];
+       int i = 0;
+       //char space[] = " ";
+
+       for (i; i < DATA_BUFFER_DIM; i++)
+       {
+
+
+           sprintf(dataString,"%f",tempData.bufferData[i]);
+           Graphics_drawStringCentered(&g_sContext, (int8_t*) dataString,10, 64, 20+i*10,OPAQUE_TEXT);
+       }
+
+       rerender = 0;
+
+
+}
+
+//*****************************************************************************
+//
+// this function shows the latest collected data from the light sensor mounted into the board
+//
+//*****************************************************************************
+void luxDataInterface()
+{
+    Graphics_clearDisplay(&g_sContext);
+
+       char title[20];
+       sprintf(title, "%s", "COLLECTED DATA-LUX");
+       Graphics_drawStringCentered(&g_sContext, (int8_t*) title, 18, 64, 5,OPAQUE_TEXT);
+
+
+
+       char dataString[10];
+       int i = 0;
+
+       for (i; i < DATA_BUFFER_DIM; i++)
+       {
+
+
+           sprintf(dataString,"%f",luxData.bufferData[i]);
+           Graphics_drawStringCentered(&g_sContext, (int8_t*) dataString,10, 64, 20+i*10,OPAQUE_TEXT);
+       }
+
+       rerender = 0;
+
+
+}
+
+
+//*****************************************************************************
+//
+// this function shows the latest collected data from the light sensor mounted into the board
+//
+//*****************************************************************************
 void interfacePlaceholder()
 {
     Graphics_clearDisplay(&g_sContext);
@@ -373,6 +503,7 @@ void noBehaviour()
 
 int noSelectionFunction()
 {
+    ADC14_disableModule();
     return 0;
 }
 
@@ -380,14 +511,82 @@ int backSelectionFunction()
 {
     if (!(P4IN & GPIO_PIN1))
     {
-        Graphics_clearDisplay(&g_sContext);
-        Graphics_drawStringCentered(&g_sContext, (int8_t*) "BACK FUNC", 9, 64,
-                                    10, OPAQUE_TEXT);
+        // TEST CHECK
+        //Graphics_clearDisplay(&g_sContext);
+        //Graphics_drawStringCentered(&g_sContext, (int8_t*) "BACK FUNC", 9, 64,10, OPAQUE_TEXT);
+
+        // CODICE
+        rerender = 1;
         currentState = 3;
 
-        rerender = 1;
+
         //interfacePlaceholder(); //*(states[currentState].interfaces[states[currentState].selectedInterface])();
     }
+    return 0;
+}
+
+
+int communicateSelectionFunction()
+{
+    //char string[30];
+
+       //renderStop = 0;
+       int intermediateValue;
+
+       if (samplingStop == 0)
+       {
+           if (resultsBuffer[0] > 16330)    // joystick turned left
+           {
+               int intermediateInterface = states[currentState].selectedInterface+1;
+               states[currentState].selectedInterface = intermediateInterface % states[currentState].interfacesDim;
+
+
+               samplingStop = 1;
+               rerender = 1;
+
+           }
+           else if (resultsBuffer[0] < 50)    // joystick turned right
+           {
+               int intermediateInterface = states[currentState].selectedInterface+1;
+               states[currentState].selectedInterface = intermediateInterface % states[currentState].interfacesDim;
+
+               samplingStop = 1;
+               rerender = 1;
+               //Graphics_drawStringCentered(&g_sContext,(int8_t *)string,18,64,50,OPAQUE_TEXT);
+
+           }
+
+
+           //sprintf(string, "SElem : %d",selectedElement);
+           //Graphics_drawStringCentered(&g_sContext,(int8_t *)string,30,64,50,OPAQUE_TEXT);
+
+           int i = 0;
+           for (i; i < 300250; i++);
+           samplingStop = 0;
+              // busy wait per scandire il tempo di campionamento
+
+           //Graphics_drawStringCentered(&g_sContext,(int8_t *) itoa(selectedElement,string) ,4,64,50,OPAQUE_TEXT);
+   //       if (rerender==1)
+   //       {
+   //           menuInterfaceRender();
+   //           rerender = 0;
+   //       }
+
+
+    if (!(P4IN & GPIO_PIN1))
+    {
+        // TEST CHECK
+        //Graphics_clearDisplay(&g_sContext);
+        //Graphics_drawStringCentered(&g_sContext, (int8_t*) "BACK FUNC", 9, 64,10, OPAQUE_TEXT);
+
+        // CODICE
+        rerender = 1;
+        currentState = 3;
+
+
+        //interfacePlaceholder(); //*(states[currentState].interfaces[states[currentState].selectedInterface])();
+    }
+       }
     return 0;
 }
 
@@ -401,6 +600,7 @@ void render()
 
 }
 
+
 void statesInitializer()
 {
     // states are sorted thinking about the flow interactions should follow --- pairing, then collecting data, then communication to send it
@@ -409,7 +609,7 @@ void statesInitializer()
     // states[0] initialization -- pairing state
 
     states[0].selectedElement = -1;
-    states[0].selectionFunction = &communicationRoutine;
+    states[0].selectionFunction = &backSelectionFunction;
     states[0].interfacesDim = 3; //pairing,paired,error
     states[0].selectedInterface = 0;
     states[0].interfaces[0] = &pairingInterfaceRender;           //ok
@@ -418,7 +618,7 @@ void statesInitializer()
     // states[1] initialization -- normal state
 
     states[1].selectedElement = -1;
-    states[1].selectionFunction = &noSelectionFunction;
+    states[1].selectionFunction = &backSelectionFunction;
     states[1].interfacesDim = 1;   // mostra i dati irt
     states[1].selectedInterface = 0;
     states[1].interfaces[0] = &normalModeRender;
@@ -427,10 +627,11 @@ void statesInitializer()
     // states[2] initialization -- communication state
 
     states[2].selectedElement = -1;
-    states[2].selectionFunction = &noSelectionFunction;
-    states[2].interfacesDim = 3; // sending, ok,error
+    states[2].selectionFunction = &communicateSelectionFunction;
+    states[2].interfacesDim = 2; // sending, ok,error
     states[2].selectedInterface = 0;
-    states[2].interfaces[0] = &communicationInterfaceRender;            //ok
+    states[2].interfaces[0] = &tempDataInterface;//communicationInterfaceRender;            //ok
+    states[2].interfaces[1] = &luxDataInterface;
     states[2].behaviours[0] = &noBehaviour;
 
     // states[3] initialization -- menu state
@@ -440,7 +641,7 @@ void statesInitializer()
     states[3].interfacesDim = 1; // 1 per ogni rettangolo selezionabile
     states[3].selectedInterface = 0;
     states[3].interfaces[0] = &menuInterfaceRender;         //ok
-    states[3].behaviours[0] = &menuStateBehaviour;
+    states[3].behaviours[0] = &noBehaviour;
 }
 
 void _adcInit()
@@ -451,7 +652,7 @@ void _adcInit()
     GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P4, GPIO_PIN4,
     GPIO_TERTIARY_MODULE_FUNCTION);
 
-    /* Initializing ADC (ADCOSC/64/8) */
+/* Initializing ADC (ADCOSC/64/8) */
     ADC14_enableModule();
     ADC14_initModule(ADC_CLOCKSOURCE_ADCOSC, ADC_PREDIVIDER_64, ADC_DIVIDER_8,
                      0);
@@ -483,6 +684,9 @@ void _adcInit()
     /* Triggering the start of the sample */
     ADC14_enableConversion();
     ADC14_toggleConversionTrigger();
+
+    ADC14enabled=1;
+
 }
 
 void _graphicsInit()
@@ -503,18 +707,18 @@ void _graphicsInit()
 
 }
 
-//void _lightSensorInit()
-//{
-//    /* Initialize I2C communication */
-//    Init_I2C_GPIO();
-//    I2C_init();
-//
-//    /* Initialize OPT3001 digital ambient light sensor */
-//    OPT3001_init();
-//
-//    __delay_cycles(100000);
-//
-//}
+void _lightSensorInit()
+{
+    /* Initialize I2C communication */
+    Init_I2C_GPIO();
+    I2C_init();
+
+    /* Initialize OPT3001 digital ambient light sensor */
+    OPT3001_init();
+
+    __delay_cycles(100000);
+
+}
 
 void _temperatureSensorInit()
 {
@@ -549,8 +753,8 @@ void _hwInit()
     CS_initClockSignal(CS_ACLK, CS_REFOCLK_SELECT, CS_CLOCK_DIVIDER_1);
 
     _graphicsInit();
+    _temperatureSensorInit();
     _adcInit();
-    //_temperatureSensorInit();
 
     menuRectanglesInit();
     statesInitializer();
@@ -560,12 +764,14 @@ void _hwInit()
 //
 //
     tempData.currentPos = 0;
+    luxData.currentPos = 0;
 
     int i = 0;
 
     for (i; i < DATA_BUFFER_DIM; i++)
     {
         tempData.bufferData[i] = 0;
+        luxData.bufferData[i] = 0;
     }
 //
 ////    _lightSensorInit();
@@ -600,9 +806,13 @@ int main(void)
     /* Configure command line interface */
     CLI_Configure();
 
-    while (1)
+   while (1)
     {
-
+        if(currentState != 3)
+        {
+            (*states[currentState].behaviours[0])();
+            render();
+        }
     }
 
     return 0;
@@ -661,10 +871,14 @@ void ADC14_IRQHandler(void)
         resultsBuffer[1] = ADC14_getResult(ADC_MEM1);
 
         (*states[currentState].selectionFunction)();
-        render();
+
         //menuSelectionFunction();
 
     }
+
+    (*states[currentState].behaviours[0])();
+
+    render();
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -808,6 +1022,7 @@ void configurationMode()
 int communicationRoutine()
 {
     int retVal;
+
     displayBanner();
     if (isConfigurationMode)
     {
