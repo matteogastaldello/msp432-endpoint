@@ -113,6 +113,7 @@ PDE_DEPS__QUOTED :=
 SUBDIRS := \
 . \
 HAL \
+JSON \
 LcdDriver \
 board \
 cli_uart \

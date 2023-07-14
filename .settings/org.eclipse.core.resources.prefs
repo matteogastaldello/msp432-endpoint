@@ -1,6 +1,8 @@
 eclipse.preferences.version=1
 encoding//Debug/HAL/subdir_rules.mk=UTF-8
 encoding//Debug/HAL/subdir_vars.mk=UTF-8
+encoding//Debug/JSON/subdir_rules.mk=UTF-8
+encoding//Debug/JSON/subdir_vars.mk=UTF-8
 encoding//Debug/LcdDriver/subdir_rules.mk=UTF-8
 encoding//Debug/LcdDriver/subdir_vars.mk=UTF-8
 encoding//Debug/NetworkUtils/subdir_rules.mk=UTF-8

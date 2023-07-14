@@ -21,6 +21,7 @@
 #include <sys/types.h>
 #include <unistd.h> // read(), write(), close()
 #include <driverlib.h>
+#include "JSON/cJSON.h"
 #define MAX 80
 #define PORT 8080
 #define SA struct sockaddr
@@ -60,6 +61,8 @@ typedef struct
 
 Data_t tempData;
 Data_t luxData;
+
+int countSampling = 0;
 
 int ADC14_isOff = 0;
 int back = 0;
@@ -285,21 +288,27 @@ void normalModeRender()
 void normalModeBehaviour()
 {
 
-    float currentLuxData = OPT3001_getLux();
-    luxData.bufferData[luxData.currentPos] = currentLuxData;
-    int luxPartialPos = luxData.currentPos + 1;
-    luxData.currentPos = luxPartialPos % DATA_BUFFER_DIM;
+    if(countSampling == 100000){
+        float currentLuxData = OPT3001_getLux();
+        luxData.bufferData[luxData.currentPos] = currentLuxData;
+        int luxPartialPos = luxData.currentPos + 1;
+        luxData.currentPos = luxPartialPos % DATA_BUFFER_DIM;
 
-    /* Obtain temperature value from TMP006 */
-    float tempIntermediate = TMP006_getTemp();
+        /* Obtain temperature value from TMP006 */
+        float tempIntermediate = TMP006_getTemp();
 
-    tempIntermediate = tempIntermediate - 32;
-    tempData.bufferData[tempData.currentPos] = tempIntermediate * 5 / 9;
+        tempIntermediate = tempIntermediate - 32;
+        tempData.bufferData[tempData.currentPos] = tempIntermediate * 5 / 9;
 
-    int tempPartialPos = tempData.currentPos + 1; //tempData.currentPos++;
-    tempData.currentPos = tempPartialPos % DATA_BUFFER_DIM;
+        int tempPartialPos = tempData.currentPos + 1; //tempData.currentPos++;
+        tempData.currentPos = tempPartialPos % DATA_BUFFER_DIM;
 
-    rerender = 1;
+        rerender = 1;
+
+        countSampling = 0;
+    }
+    countSampling++;
+
 
 }
 
@@ -508,6 +517,7 @@ void render()
 
 void communicationBehaviour()
 {
+    sensorsJSON();
 
 }
 //-------------------------------------COMMUNICATION STATE----------------------------
@@ -956,12 +966,46 @@ int communicationRoutine()
     }
 }
 
+
+void sensorsJSON(){
+    char *out;
+    cJSON *root, *temperatures, *luxArray, *sensorsData;
+
+    /* create root node and array */
+    root = cJSON_CreateObject();
+    sensorsData = cJSON_CreateObject();
+
+    temperatures = cJSON_CreateFloatArray(tempData.bufferData, DATA_BUFFER_DIM);
+    cJSON_AddItemToObject(sensorsData, "temperatures", temperatures);
+
+    temperatures = cJSON_CreateFloatArray(luxData.bufferData, DATA_BUFFER_DIM);
+    cJSON_AddItemToObject(sensorsData, "lux", temperatures);
+
+//    char buff[50];
+//    sprintf(buff, "dim lux : %d\n", cJSON_GetArraySize(luxArray));
+//    CLI_Write(buff);
+//    sprintf(buff, "dim temp : %d\n", cJSON_GetArraySize(temperatures));
+//    CLI_Write(buff);
+
+
+
+    /* add sensors array to sensors Object */
+    cJSON_AddItemToObject(root, "sensors", sensorsData);
+
+    /* print everything */
+    out = cJSON_Print(root);
+    CLI_Write(out);
+    free(out);
+
+    /* free all objects under root and root itself */
+    cJSON_Delete(root);
+}
+
 /*
  * Application's entry point
  */
 int main(int argc, char **argv)
 {
-
     _i32 retVal = -1;
     firstStart = true;
     retVal = initializeAppVariables();

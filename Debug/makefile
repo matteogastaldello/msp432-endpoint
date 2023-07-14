@@ -14,6 +14,7 @@ ORDERED_OBJS += \
 "./HAL/HAL_I2C.obj" \
 "./HAL/HAL_OPT3001.obj" \
 "./HAL/HAL_TMP006.obj" \
+"./JSON/cJSON.obj" \
 "./LcdDriver/Crystalfontz128x128_ST7735.obj" \
 "./LcdDriver/HAL_MSP_EXP432P401R_Crystalfontz128x128_ST7735.obj" \
 "./board/board.obj" \
@@ -76,6 +77,7 @@ RMDIR := rm -rf
 -include sources.mk
 -include subdir_vars.mk
 -include HAL/subdir_vars.mk
+-include JSON/subdir_vars.mk
 -include LcdDriver/subdir_vars.mk
 -include board/subdir_vars.mk
 -include cli_uart/subdir_vars.mk
@@ -87,6 +89,7 @@ RMDIR := rm -rf
 -include uart_cc3100/subdir_vars.mk
 -include subdir_rules.mk
 -include HAL/subdir_rules.mk
+-include JSON/subdir_rules.mk
 -include LcdDriver/subdir_rules.mk
 -include board/subdir_rules.mk
 -include cli_uart/subdir_rules.mk
@@ -226,10 +229,10 @@ msp432-endpoint.hex: $(EXE_OUTPUTS)
 # Other Targets
 clean:
 	-$(RM) $(BIN_OUTPUTS__QUOTED)$(EXE_OUTPUTS__QUOTED)
-	-$(RM) "main.obj" "startup_msp432p401r_ccs.obj" "system_msp432p401r.obj" "HAL/HAL_I2C.obj" "HAL/HAL_OPT3001.obj" "HAL/HAL_TMP006.obj" "LcdDriver/Crystalfontz128x128_ST7735.obj" "LcdDriver/HAL_MSP_EXP432P401R_Crystalfontz128x128_ST7735.obj" "board/board.obj" "cli_uart/cli_uart.obj" "driverlib/MSP432P4xx/adc14.obj" "driverlib/MSP432P4xx/aes256.obj" "driverlib/MSP432P4xx/comp_e.obj" "driverlib/MSP432P4xx/cpu.obj" "driverlib/MSP432P4xx/crc32.obj" "driverlib/MSP432P4xx/cs.obj" "driverlib/MSP432P4xx/dma.obj" "driverlib/MSP432P4xx/flash.obj" "driverlib/MSP432P4xx/fpu.obj" "driverlib/MSP432P4xx/gpio.obj" "driverlib/MSP432P4xx/i2c.obj" "driverlib/MSP432P4xx/interrupt.obj" "driverlib/MSP432P4xx/mpu.obj" "driverlib/MSP432P4xx/pcm.obj" "driverlib/MSP432P4xx/pmap.obj" "driverlib/MSP432P4xx/pss.obj" "driverlib/MSP432P4xx/ref_a.obj" "driverlib/MSP432P4xx/reset.obj" "driverlib/MSP432P4xx/rtc_c.obj" "driverlib/MSP432P4xx/spi.obj" "driverlib/MSP432P4xx/sysctl.obj" "driverlib/MSP432P4xx/systick.obj" "driverlib/MSP432P4xx/timer32.obj" 
-	-$(RM) "driverlib/MSP432P4xx/timer_a.obj" "driverlib/MSP432P4xx/uart.obj" "driverlib/MSP432P4xx/wdt_a.obj" "net/bsd/errnoutil.obj" "net/bsd/netdb.obj" "net/bsd/socket.obj" "net/slnetif.obj" "net/slnetsock.obj" "net/slnetutils.obj" "simplelink/source/device.obj" "simplelink/source/driver.obj" "simplelink/source/flowcont.obj" "simplelink/source/fs.obj" "simplelink/source/netapp.obj" "simplelink/source/netcfg.obj" "simplelink/source/nonos.obj" "simplelink/source/socket.obj" "simplelink/source/spawn.obj" "simplelink/source/wlan.obj" "spi_cc3100/spi_cc3100.obj" "uart_cc3100/uart_cc3100.obj" 
-	-$(RM) "main.d" "startup_msp432p401r_ccs.d" "system_msp432p401r.d" "HAL/HAL_I2C.d" "HAL/HAL_OPT3001.d" "HAL/HAL_TMP006.d" "LcdDriver/Crystalfontz128x128_ST7735.d" "LcdDriver/HAL_MSP_EXP432P401R_Crystalfontz128x128_ST7735.d" "board/board.d" "cli_uart/cli_uart.d" "driverlib/MSP432P4xx/adc14.d" "driverlib/MSP432P4xx/aes256.d" "driverlib/MSP432P4xx/comp_e.d" "driverlib/MSP432P4xx/cpu.d" "driverlib/MSP432P4xx/crc32.d" "driverlib/MSP432P4xx/cs.d" "driverlib/MSP432P4xx/dma.d" "driverlib/MSP432P4xx/flash.d" "driverlib/MSP432P4xx/fpu.d" "driverlib/MSP432P4xx/gpio.d" "driverlib/MSP432P4xx/i2c.d" "driverlib/MSP432P4xx/interrupt.d" "driverlib/MSP432P4xx/mpu.d" "driverlib/MSP432P4xx/pcm.d" "driverlib/MSP432P4xx/pmap.d" "driverlib/MSP432P4xx/pss.d" "driverlib/MSP432P4xx/ref_a.d" "driverlib/MSP432P4xx/reset.d" "driverlib/MSP432P4xx/rtc_c.d" "driverlib/MSP432P4xx/spi.d" "driverlib/MSP432P4xx/sysctl.d" "driverlib/MSP432P4xx/systick.d" "driverlib/MSP432P4xx/timer32.d" "driverlib/MSP432P4xx/timer_a.d" "driverlib/MSP432P4xx/uart.d" 
-	-$(RM) "driverlib/MSP432P4xx/wdt_a.d" "net/bsd/errnoutil.d" "net/bsd/netdb.d" "net/bsd/socket.d" "net/slnetif.d" "net/slnetsock.d" "net/slnetutils.d" "simplelink/source/device.d" "simplelink/source/driver.d" "simplelink/source/flowcont.d" "simplelink/source/fs.d" "simplelink/source/netapp.d" "simplelink/source/netcfg.d" "simplelink/source/nonos.d" "simplelink/source/socket.d" "simplelink/source/spawn.d" "simplelink/source/wlan.d" "spi_cc3100/spi_cc3100.d" "uart_cc3100/uart_cc3100.d" 
+	-$(RM) "main.obj" "startup_msp432p401r_ccs.obj" "system_msp432p401r.obj" "HAL/HAL_I2C.obj" "HAL/HAL_OPT3001.obj" "HAL/HAL_TMP006.obj" "JSON/cJSON.obj" "LcdDriver/Crystalfontz128x128_ST7735.obj" "LcdDriver/HAL_MSP_EXP432P401R_Crystalfontz128x128_ST7735.obj" "board/board.obj" "cli_uart/cli_uart.obj" "driverlib/MSP432P4xx/adc14.obj" "driverlib/MSP432P4xx/aes256.obj" "driverlib/MSP432P4xx/comp_e.obj" "driverlib/MSP432P4xx/cpu.obj" "driverlib/MSP432P4xx/crc32.obj" "driverlib/MSP432P4xx/cs.obj" "driverlib/MSP432P4xx/dma.obj" "driverlib/MSP432P4xx/flash.obj" "driverlib/MSP432P4xx/fpu.obj" "driverlib/MSP432P4xx/gpio.obj" "driverlib/MSP432P4xx/i2c.obj" "driverlib/MSP432P4xx/interrupt.obj" "driverlib/MSP432P4xx/mpu.obj" "driverlib/MSP432P4xx/pcm.obj" "driverlib/MSP432P4xx/pmap.obj" "driverlib/MSP432P4xx/pss.obj" "driverlib/MSP432P4xx/ref_a.obj" "driverlib/MSP432P4xx/reset.obj" "driverlib/MSP432P4xx/rtc_c.obj" "driverlib/MSP432P4xx/spi.obj" "driverlib/MSP432P4xx/sysctl.obj" "driverlib/MSP432P4xx/systick.obj" 
+	-$(RM) "driverlib/MSP432P4xx/timer32.obj" "driverlib/MSP432P4xx/timer_a.obj" "driverlib/MSP432P4xx/uart.obj" "driverlib/MSP432P4xx/wdt_a.obj" "net/bsd/errnoutil.obj" "net/bsd/netdb.obj" "net/bsd/socket.obj" "net/slnetif.obj" "net/slnetsock.obj" "net/slnetutils.obj" "simplelink/source/device.obj" "simplelink/source/driver.obj" "simplelink/source/flowcont.obj" "simplelink/source/fs.obj" "simplelink/source/netapp.obj" "simplelink/source/netcfg.obj" "simplelink/source/nonos.obj" "simplelink/source/socket.obj" "simplelink/source/spawn.obj" "simplelink/source/wlan.obj" "spi_cc3100/spi_cc3100.obj" "uart_cc3100/uart_cc3100.obj" 
+	-$(RM) "main.d" "startup_msp432p401r_ccs.d" "system_msp432p401r.d" "HAL/HAL_I2C.d" "HAL/HAL_OPT3001.d" "HAL/HAL_TMP006.d" "JSON/cJSON.d" "LcdDriver/Crystalfontz128x128_ST7735.d" "LcdDriver/HAL_MSP_EXP432P401R_Crystalfontz128x128_ST7735.d" "board/board.d" "cli_uart/cli_uart.d" "driverlib/MSP432P4xx/adc14.d" "driverlib/MSP432P4xx/aes256.d" "driverlib/MSP432P4xx/comp_e.d" "driverlib/MSP432P4xx/cpu.d" "driverlib/MSP432P4xx/crc32.d" "driverlib/MSP432P4xx/cs.d" "driverlib/MSP432P4xx/dma.d" "driverlib/MSP432P4xx/flash.d" "driverlib/MSP432P4xx/fpu.d" "driverlib/MSP432P4xx/gpio.d" "driverlib/MSP432P4xx/i2c.d" "driverlib/MSP432P4xx/interrupt.d" "driverlib/MSP432P4xx/mpu.d" "driverlib/MSP432P4xx/pcm.d" "driverlib/MSP432P4xx/pmap.d" "driverlib/MSP432P4xx/pss.d" "driverlib/MSP432P4xx/ref_a.d" "driverlib/MSP432P4xx/reset.d" "driverlib/MSP432P4xx/rtc_c.d" "driverlib/MSP432P4xx/spi.d" "driverlib/MSP432P4xx/sysctl.d" "driverlib/MSP432P4xx/systick.d" "driverlib/MSP432P4xx/timer32.d" "driverlib/MSP432P4xx/timer_a.d" 
+	-$(RM) "driverlib/MSP432P4xx/uart.d" "driverlib/MSP432P4xx/wdt_a.d" "net/bsd/errnoutil.d" "net/bsd/netdb.d" "net/bsd/socket.d" "net/slnetif.d" "net/slnetsock.d" "net/slnetutils.d" "simplelink/source/device.d" "simplelink/source/driver.d" "simplelink/source/flowcont.d" "simplelink/source/fs.d" "simplelink/source/netapp.d" "simplelink/source/netcfg.d" "simplelink/source/nonos.d" "simplelink/source/socket.d" "simplelink/source/spawn.d" "simplelink/source/wlan.d" "spi_cc3100/spi_cc3100.d" "uart_cc3100/uart_cc3100.d" 
 	-@echo 'Finished clean'
 	-@echo ' '
 
