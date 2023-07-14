@@ -2607,6 +2607,7 @@ CJSON_PUBLIC(cJSON *) cJSON_CreateFloatArray(const float *numbers, int count)
         if(!i)
         {
             a->child = n;
+            //CLI_Write("succes insertings");
         }
         else
         {

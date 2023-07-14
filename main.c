@@ -49,7 +49,7 @@
 //LCD Definitions
 #define MENU_SIZE 3
 #define INTERFACES_DIM_MAX 5
-#define DATA_BUFFER_DIM 10
+#define DATA_BUFFER_DIM 5
 //END LCD Definitions
 
 //LCD Variables
@@ -978,8 +978,9 @@ void sensorsJSON(){
     temperatures = cJSON_CreateFloatArray(tempData.bufferData, DATA_BUFFER_DIM);
     cJSON_AddItemToObject(sensorsData, "temperatures", temperatures);
 
-    temperatures = cJSON_CreateFloatArray(luxData.bufferData, DATA_BUFFER_DIM);
-    cJSON_AddItemToObject(sensorsData, "lux", temperatures);
+
+    luxArray = cJSON_CreateFloatArray(luxData.bufferData, DATA_BUFFER_DIM);;
+    cJSON_AddItemToObject(sensorsData, "lux", luxArray);
 
 //    char buff[50];
 //    sprintf(buff, "dim lux : %d\n", cJSON_GetArraySize(luxArray));
