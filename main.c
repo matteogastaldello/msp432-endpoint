@@ -254,7 +254,8 @@ int menuSelectionFunction()
 
             ADC14_isOff = 1;
             currentState = selectedElement;
-            ADC14_Kill();
+
+            //ADC14_Kill();
 
         }
 
@@ -284,27 +285,28 @@ void normalModeRender()
     OPAQUE_TEXT);
 
 }
+void sensingMode(){
+    float currentLuxData = OPT3001_getLux();
+    luxData.bufferData[luxData.currentPos] = currentLuxData;
+    int luxPartialPos = luxData.currentPos + 1;
+    luxData.currentPos = luxPartialPos % DATA_BUFFER_DIM;
+
+    /* Obtain temperature value from TMP006 */
+    float tempIntermediate = TMP006_getTemp();
+
+    tempIntermediate = tempIntermediate - 32;
+    tempData.bufferData[tempData.currentPos] = tempIntermediate * 5 / 9;
+
+    int tempPartialPos = tempData.currentPos + 1; //tempData.currentPos++;
+    tempData.currentPos = tempPartialPos % DATA_BUFFER_DIM;
+}
 
 void normalModeBehaviour()
 {
 
     if(countSampling == 100000){
-        float currentLuxData = OPT3001_getLux();
-        luxData.bufferData[luxData.currentPos] = currentLuxData;
-        int luxPartialPos = luxData.currentPos + 1;
-        luxData.currentPos = luxPartialPos % DATA_BUFFER_DIM;
-
-        /* Obtain temperature value from TMP006 */
-        float tempIntermediate = TMP006_getTemp();
-
-        tempIntermediate = tempIntermediate - 32;
-        tempData.bufferData[tempData.currentPos] = tempIntermediate * 5 / 9;
-
-        int tempPartialPos = tempData.currentPos + 1; //tempData.currentPos++;
-        tempData.currentPos = tempPartialPos % DATA_BUFFER_DIM;
-
+        sensingMode();
         rerender = 1;
-
         countSampling = 0;
     }
     countSampling++;
@@ -335,6 +337,8 @@ void pairingBehaviour()
     //(*states[currentState].interfaces[states[currentState].selectedInterface])();
 
     // add pairing code HERE
+
+    communicationRoutine();
 
     if(!isPaired){
         communicationRoutine();
@@ -517,7 +521,17 @@ void render()
 
 void communicationBehaviour()
 {
-    sensorsJSON();
+    if(countSampling == 100000){
+        sensingMode();
+
+        if(tempData.currentPos == DATA_BUFFER_DIM-1){
+            //sensorsJSON();
+            communicationMode();
+        }
+        countSampling = 0;
+    }
+    countSampling++;
+
 
 }
 //-------------------------------------COMMUNICATION STATE----------------------------
@@ -678,28 +692,7 @@ void _hwInit()
     _adcInit();
 }
 
-///*
-// * Main function
-// */
-//int main(void)
-//{
-//
-//    _hwInit();
-//
-//    while (1)
-//    {
-//        if(ADC14_isOff == 1)
-//        {
-//            render();
-//            (*states[currentState].behaviours[0])();
-//
-//        }
-//    }
-//}
-
-/* This interrupt is fired whenever a conversion is completed and placed in
- * ADC_MEM1. This signals the end of conversion and the results array is
- * grabbed and placed in resultsBuffer */
+ /* grabbed and placed in resultsBuffer */
 void ADC14_IRQHandler(void)
 {
     uint64_t status;
@@ -719,6 +712,9 @@ void ADC14_IRQHandler(void)
 
         if (currentState == 3)
             (*states[currentState].selectionFunction)();
+        else if (currentState == 2){
+            (*states[currentState].behaviours[0])();
+        }
 
     }
 }
@@ -966,6 +962,94 @@ int communicationRoutine()
     }
 }
 
+// Function designed for chat between client and server.
+void communicationMode()
+{
+    // Accept the data packet from client and verification
+    connfd = SL_EAGAIN;
+    while (connfd == SL_EAGAIN)
+    {
+        connfd = accept(sockfd, (SA*) &cli, &len);
+    }
+
+    if (connfd < 0)
+    {
+        CLI_Write("server accept failed...\n");
+        exit(0);
+    }
+    else
+        CLI_Write("server accept the client...\n");
+
+    char buff[MAX];
+    CLI_Write("Entering function...\n");
+    uint32_t rcvd_bytes = 0;
+
+    CLI_Write("Starting new read\n\r");
+    int status = 0;
+    bzero(buff, sizeof(buff));
+
+    while (status != sizeof(buff))
+    {
+        do
+        {
+            status = sl_Recv(connfd, buff, sizeof(buff), 0);
+        } while (status == SL_EAGAIN);
+        char bf[100];
+        sprintf(bf, "\nReceived packets (%d bytes) successfully\n\r", status);
+        CLI_Write(bf);
+        if (status < 0)
+        {
+            CLI_Write("TCP Error occured!\n");
+            sl_Close(connfd);
+            return (-1);
+        }
+        else if (status == sizeof(buff))
+        {
+            //CREATING JSON
+            char *out;
+            cJSON *root, *temperatures, *luxArray, *sensorsData;
+
+            /* create root node and array */
+            root = cJSON_CreateObject();
+            sensorsData = cJSON_CreateObject();
+
+            temperatures = cJSON_CreateFloatArray(tempData.bufferData, DATA_BUFFER_DIM);
+            cJSON_AddItemToObject(sensorsData, "temperatures", temperatures);
+
+
+            luxArray = cJSON_CreateFloatArray(luxData.bufferData, DATA_BUFFER_DIM);;
+            cJSON_AddItemToObject(sensorsData, "lux", luxArray);
+
+            /* add sensors array to sensors Object */
+            cJSON_AddItemToObject(root, "sensors", sensorsData);
+
+            /* print everything */
+            out = cJSON_Print(root);
+            sl_Send(connfd, out, sizeof(out), 0);
+
+            CLI_Write(out);
+            free(out);
+
+            /* free all objects under root and root itself */
+            cJSON_Delete(root);
+
+        }
+    }
+    char tmp[100] = "";
+    sprintf(tmp, "\nReceived %u packets (%u bytes) successfully\n\r",
+            (status / 1), status);
+    CLI_Write(tmp);
+    sprintf(tmp, "\nMessage is: %s\n", buff);
+    CLI_Write(tmp);
+    status = 0;
+
+    //sprintf(buff, "Closing Connection");
+    // and send that buffer to client
+    //sl_Send(connfd, buff, sizeof(buff), 0);
+    // After chatting close the socket
+    close(sockfd);
+
+}
 
 void sensorsJSON(){
     char *out;
@@ -982,14 +1066,6 @@ void sensorsJSON(){
     luxArray = cJSON_CreateFloatArray(luxData.bufferData, DATA_BUFFER_DIM);;
     cJSON_AddItemToObject(sensorsData, "lux", luxArray);
 
-//    char buff[50];
-//    sprintf(buff, "dim lux : %d\n", cJSON_GetArraySize(luxArray));
-//    CLI_Write(buff);
-//    sprintf(buff, "dim temp : %d\n", cJSON_GetArraySize(temperatures));
-//    CLI_Write(buff);
-
-
-
     /* add sensors array to sensors Object */
     cJSON_AddItemToObject(root, "sensors", sensorsData);
 
@@ -1005,8 +1081,7 @@ void sensorsJSON(){
 /*
  * Application's entry point
  */
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv){
     _i32 retVal = -1;
     firstStart = true;
     retVal = initializeAppVariables();
@@ -1024,24 +1099,12 @@ int main(int argc, char **argv)
 
     while (1)
     {
-        if (ADC14_isOff == 1)
-        {
+//        if (ADC14_isOff == 1)
+//        {
             render();
             (*states[currentState].behaviours[0])();
-        }
+//        }
     }
-
-//    while (1)
-//    {
-//        if (isConfigurationMode)
-//        {
-//            communicationRoutine();
-//        }
-//        else
-//        {
-//            CLI_Write("Normal Mode\n");
-//        }
-//    }
 
     return 0;
 }
