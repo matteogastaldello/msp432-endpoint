@@ -713,22 +713,23 @@ void ADC14_IRQHandler(void)
     }
 }
 
-void PORT1_IRQHandler()
-{
-    /* Check which pins generated the interrupts */
-    uint_fast16_t status = GPIO_getEnabledInterruptStatus(GPIO_PORT_P1);
-    /* clear interrupt flag (to clear pending interrupt indicator */
-    GPIO_clearInterruptFlag(GPIO_PORT_P1, status);
-    if(status & GPIO_PIN1)
-    {
-        GPIO_toggleOutputOnPin(GPIO_PORT_P1, GPIO_PIN0);
-        if(currentState == 0 || currentState == 1 || currentState == 2)
-        {
-            (*states[currentState].selectionFunction)();
-        }
-    }
-
-}
+//void PORT1_IRQHandler()
+//{
+//    /* Check which pins generated the interrupts */
+//    uint_fast16_t status = GPIO_getEnabledInterruptStatus(GPIO_PORT_P1);
+//    /* clear interrupt flag (to clear pending interrupt indicator */
+//    GPIO_clearInterruptFlag(GPIO_PORT_P1, status);
+//    /* check if we received P1.1 or P1.4 interrupt */
+//    if(status & GPIO_PIN1)
+//    {
+//        GPIO_toggleOutputOnPin(GPIO_PORT_P1, GPIO_PIN0);
+//        if(currentState == 0 || currentState == 1 || currentState == 2)
+//        {
+//            (*states[currentState].selectionFunction)();
+//        }
+//    }
+//
+//}
 /*
  * STATIC FUNCTION DEFINITIONS -- Start
  */
@@ -740,6 +741,30 @@ static void displayBanner();
 static _i32 getHostIP();
 static _i32 createConnection();
 
+/* Port1 ISR */
+void PORT1_IRQHandler(void)
+{
+    /* Check which pins generated the interrupts */
+    uint_fast16_t status = GPIO_getEnabledInterruptStatus(GPIO_PORT_P1);
+    /* clear interrupt flag (to clear pending interrupt indicator */
+    GPIO_clearInterruptFlag(GPIO_PORT_P1, status);
+    /* check if we received P1.1 interrupt */
+    if (status & GPIO_PIN1)
+    {
+        CLI_Write("Button 1.1 pressed\n");
+        if (isConfigurationMode)
+        {
+            isConfigurationMode = false;
+            CLI_Write(
+                    "Returning to default state, configuration mode deactivated\n");
+        }
+        else
+        {
+            CLI_Write("Changing to Configuration Mode\n");
+            isConfigurationMode = true;
+        }
+    }
+}
 
 void interruptSetup()
 {
