@@ -293,11 +293,8 @@ Interrupt_setPriority(INT_ADC14, (uint8_t) 100);
 - ## Setting a buffer dimension compatible according to what the memory map allowed us to do
 
 Initially we choose DATA_BUFFER_DIM as 10 but when creating Json objects we found out that creating such objects as large as we wanted to was causing an overflow involving a reserved area of the memory (we understood this when comparing addresses of object the system was creating in debug mode and the memory map of the msp432), so we reduced the dimension of the buffer in order to fill the available space as much as we could but not enough to end up in the reserved area.
-# Links to video and powerpoint
 
 
-# SUPPORT
-None
 # AUTHORS and ACKNOWLEDGMENTS
 
 Gastaldello Matteo\
