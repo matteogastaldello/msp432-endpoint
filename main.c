@@ -1,7 +1,7 @@
 #include "simplelink.h"
 #include "sl_common.h"
 
-//LCD-Sensor driver
+//LCD & Sensor drivers and libraries
 #include "msp.h"
 #include <ti/devices/msp432p4xx/inc/msp.h>
 #include <ti/devices/msp432p4xx/driverlib/driverlib.h>
@@ -21,7 +21,9 @@
 #include <sys/types.h>
 #include <unistd.h> // read(), write(), close()
 #include <driverlib.h>
+//external libraries
 #include "JSON/cJSON.h"
+
 #define MAX 80
 #define PORT 8080
 #define SA struct sockaddr
@@ -52,7 +54,7 @@
 #define DATA_BUFFER_DIM 5
 //END LCD Definitions
 
-//LCD Variables
+
 typedef struct
 {
     int currentPos;
@@ -62,16 +64,37 @@ typedef struct
 Data_t tempData;
 Data_t luxData;
 
+//global variables for the control of the FSM
 int countSampling = 0;
-
 int ADC14_isOff = 0;
 int back = 0;
-int dataPos = 0;
+int dataPos = 0; // ca be shared because at each sampling cycle both temp and lux add a data to their respective buffer, so they'll fill in parallel
 int pressed = 0;
-int currentState = 3;
+int currentState = 3;   // seta at 3 to make the FSM start in menu state
 int selectedElement = 0;
 int samplingStop;
 int rerender;
+bool isConfigurationMode = false;
+
+//tcp var
+int sockfd, connfd, len;
+struct sockaddr_in servaddr, cli;
+int firstStart;
+bool isPaired;
+
+
+/* Application specific status/error codes */
+typedef enum
+{
+    DEVICE_NOT_IN_STATION_MODE = -0x7D0, /* Choosing this number to avoid overlap with host-driver's error codes */
+    STATUS_CODE_MAX = -0xBB8
+} e_AppStatusCodes;
+/*
+ * GLOBAL VARIABLES -- Start
+ */
+_u32 g_Status = 0;
+
+Graphics_Rectangle menuRectangles[MENU_SIZE]; //array of rectangles that contains a rectangle for each state the machine can fall into.
 
 /* Graphic library context */
 Graphics_Context g_sContext;
@@ -84,6 +107,8 @@ static uint16_t resultsBuffer[2];
 
 //definig a pointer to void function not receiving parameters as behaviour_t
 typedef void (*behaviour_t)();
+
+
 
 typedef struct
 {
@@ -102,26 +127,7 @@ typedef struct
 } State_t;
 
 State_t states[4];  //the array of states the machine will move into
-Graphics_Rectangle menuRectangles[MENU_SIZE]; //array of rectangles that contains a rectangle for each state the machine can fall into.
-//END LCD Variables
 
-bool isConfigurationMode = false;
-
-//tcp var
-int sockfd, connfd, len;
-struct sockaddr_in servaddr, cli;
-int firstStart;
-bool isPaired;
-/* Application specific status/error codes */
-typedef enum
-{
-    DEVICE_NOT_IN_STATION_MODE = -0x7D0, /* Choosing this number to avoid overlap with host-driver's error codes */
-    STATUS_CODE_MAX = -0xBB8
-} e_AppStatusCodes;
-/*
- * GLOBAL VARIABLES -- Start
- */
-_u32 g_Status = 0;
 
 struct
 {
@@ -135,9 +141,8 @@ struct
 } g_AppData;
 
 /*
- * GLOBAL VARIABLES -- End
+ * Function that fills the states of the FSM each one with its own characterizing functions
  */
-//these will be displayed into the menu state
 void menuRectanglesInit()
 {
 
@@ -158,6 +163,9 @@ void menuRectanglesInit()
     }
 }
 
+/*
+ * Function that stops ADC14
+ */
 void ADC14_Kill()
 {
     ADC14_disableConversion();
@@ -167,6 +175,10 @@ void ADC14_Kill()
     ADC14_isOff = 1;
 }
 
+/*
+ * Function that restarts ADC14 --- can be used after a call to ADC14_Kill but not instead of ADC initialization
+ */
+
 void ADC14_Revive()
 {
     ADC14_enableModule();
@@ -175,6 +187,12 @@ void ADC14_Revive()
     ADC14_isOff = 0;
 }
 
+
+//---------------------------MENU STATE---------------------------
+
+/*
+ * Function that renders the menu interface when FSM is in menu state (states[3])
+ */
 void menuInterfaceRender()
 {
     Graphics_clearDisplay(&g_sContext);
@@ -200,13 +218,19 @@ void menuInterfaceRender()
 
 }
 
-void menuStateBehaviour()
-{
+/*
+ * Function that contains the behaviour of the FSM when in menu state (sates[3]) . It's empty because the behaviour of menu state is handled by adc14 when calls
+ * selection function
+ */
+void menuStateBehaviour(){}
 
-    //menuInterfaceRender();
 
-}
-
+/*
+ * Function that changes the selected rectangle inside menu when FSM is in menu state (state[3]).
+ * I'ts fired by the ADC14 and if senses that the joystick on the boosterpack has been moved over a certain threshold it changes currentState variable
+ * so at the next refresh another rectangle will be selected.
+ * If it senses that the button under the joystick has been pressed then the currentState is selected and FSM's state is changed with the one selected
+ */
 int menuSelectionFunction()
 {
 
@@ -229,7 +253,7 @@ int menuSelectionFunction()
 
         }
 
-        if (selectedElement < 0)
+        if (selectedElement < 0)    // this enables a circular menu selection
         {
             selectedElement = MENU_SIZE + selectedElement;
         }
@@ -238,8 +262,7 @@ int menuSelectionFunction()
         selectedElement = intermediateValue % MENU_SIZE;
 
         int i = 0;
-        for (i; i < 300250; i++)
-            ; // busy wait just to let some time pass before the new sample is taken
+        for (i; i < 300250; i++); // busy wait just to let some time pass before the new sample is taken
 
         if (!(P4IN & GPIO_PIN1) && pressed == 0)
         {
@@ -247,8 +270,7 @@ int menuSelectionFunction()
             rerender = 1;
 
             int i = 0;
-            for (i; i < 300250; i++)
-                ; // busy wait just to let some time pass before the new sample is taken
+            for (i; i < 300250; i++); // busy wait just to let some time pass before the new sample is taken
 
             pressed = 0;
 
@@ -268,6 +290,9 @@ int menuSelectionFunction()
 
 //-------------------------------------NORMAL STATE----------------------------
 
+/*
+ * Function that when called renders the screen of normal mode (states[1])
+ */
 void normalModeRender()
 {
     Graphics_clearDisplay(&g_sContext);
@@ -285,6 +310,11 @@ void normalModeRender()
     OPAQUE_TEXT);
 
 }
+
+/*
+ * Function that when called senses the environment through boosterpack sensors and stores the collected data inside data_t buffers
+ */
+
 void sensingMode(){
     float currentLuxData = OPT3001_getLux();
     luxData.bufferData[luxData.currentPos] = currentLuxData;
@@ -301,6 +331,10 @@ void sensingMode(){
     tempData.currentPos = tempPartialPos % DATA_BUFFER_DIM;
 }
 
+/*
+ * Wrapper function that regulates the behaviour of FSM during normal state (states[1])
+ */
+
 void normalModeBehaviour()
 {
 
@@ -316,6 +350,9 @@ void normalModeBehaviour()
 
 //-------------------------------------PAIRING STATE----------------------------
 
+/*
+ * Function that when called renders the screen of pairing mode (states[0])
+ */
 void pairingInterfaceRender()
 {
     Graphics_clearDisplay(&g_sContext);
@@ -324,19 +361,11 @@ void pairingInterfaceRender()
     rerender = 0;
 }
 
-void pairedInterfaceRender()
-{
-    Graphics_clearDisplay(&g_sContext);
-    Graphics_drawStringCentered(&g_sContext, (int8_t*) "Paired", 7, 64, 30,
-                                OPAQUE_TEXT);
-    rerender = 0;
-}
-
+/*
+ * Functions that  wrapps the behaviour of the FSM when in pairing state (states[0])
+ */
 void pairingBehaviour()
 {
-    //(*states[currentState].interfaces[states[currentState].selectedInterface])();
-
-    // add pairing code HERE
 
     communicationRoutine();
 
@@ -346,9 +375,14 @@ void pairingBehaviour()
     }
 }
 
+
+//-------------------------------------COMMUNICATION STATE----------------------------
+
+/*
+ * Function that when called renders the screen of communication mode (states[2])
+ */
 void communicationInterfaceRender()
 {
-    //Graphics_flushBuffer(&g_sContext);
     Graphics_clearDisplay(&g_sContext);
 
     char title[20];
@@ -358,14 +392,9 @@ void communicationInterfaceRender()
 
     char dataString[10];
     int i = 0;
-    //char space[] = " ";
 
     for (i; i < DATA_BUFFER_DIM; i++)
     {
-//        char currentData[5];
-//        itoa(tempData.bufferData[0], currentData);
-//        strncat(dataString, currentData, 2);
-//        strncat(dataString, space, 1);
 
         sprintf(dataString, "%f", tempData.bufferData[i]);
         Graphics_drawStringCentered(&g_sContext, (int8_t*) dataString, 10, 64,
@@ -375,9 +404,11 @@ void communicationInterfaceRender()
     rerender = 0;
 }
 
+/*
+ * Function that when called shows data collected up to that moment from the temperature sensor present on the boosterpack
+ */
 void tempDataInterface()
 {
-    //Graphics_flushBuffer(&g_sContext);
     Graphics_clearDisplay(&g_sContext);
 
     char title[20];
@@ -401,6 +432,9 @@ void tempDataInterface()
 
 }
 
+/*
+ * Function that when called shows data collected up to that moment from the light sensor present on the boosterpack
+ */
 void luxDataInterface()
 {
     Graphics_clearDisplay(&g_sContext);
@@ -425,13 +459,14 @@ void luxDataInterface()
 
 }
 
-void noBehaviour()
-{
+/*
+ * Placeholder function
+ */
+void noBehaviour(){}
 
-    //(*states[currentState].interfaces[states[currentState].selectedInterface])();
-
-}
-
+/*
+ *Function that when called sets currentState variable to 3 so the FSM state will be back to menu state as at starting time
+ */
 int backSelectionFunction()
 {
 
@@ -441,6 +476,22 @@ int backSelectionFunction()
     currentState = 3;
 
     return 0;
+}
+
+void communicationBehaviour()
+{
+    if(countSampling == 100000){
+        sensingMode();
+
+        if(tempData.currentPos == DATA_BUFFER_DIM-1){
+            //sensorsJSON();
+            communicationMode();
+        }
+        countSampling = 0;
+    }
+    countSampling++;
+
+
 }
 
 int communicateSelectionFunction()
@@ -508,33 +559,22 @@ int communicateSelectionFunction()
     return 0;
 }
 
+/*
+ * Function that is called from the cycle that handles render of the screen in order to update the screen based upon the curerntState the FSM is in if
+ * needed
+ */
 void render()
 {
     if (rerender == 1)
     {
-        //Graphics_flushBuffer(&g_sContext);
         (*states[currentState].interfaces[states[currentState].selectedInterface])();
         rerender = 0;
     }
 
 }
 
-void communicationBehaviour()
-{
-    if(countSampling == 100000){
-        sensingMode();
-
-        if(tempData.currentPos == DATA_BUFFER_DIM-1){
-            //sensorsJSON();
-            communicationMode();
-        }
-        countSampling = 0;
-    }
-    countSampling++;
 
 
-}
-//-------------------------------------COMMUNICATION STATE----------------------------
 
 void statesInitializer()
 {
@@ -747,30 +787,7 @@ static void displayBanner();
 static _i32 getHostIP();
 static _i32 createConnection();
 
-///* Port1 ISR */
-//void PORT1_IRQHandler(void)
-//{
-//    /* Check which pins generated the interrupts */
-//    uint_fast16_t status = GPIO_getEnabledInterruptStatus(GPIO_PORT_P1);
-//    /* clear interrupt flag (to clear pending interrupt indicator */
-//    GPIO_clearInterruptFlag(GPIO_PORT_P1, status);
-//    /* check if we received P1.1 interrupt */
-//    if (status & GPIO_PIN1)
-//    {
-//        CLI_Write("Button 1.1 pressed\n");
-//        if (isConfigurationMode)
-//        {
-//            isConfigurationMode = false;
-//            CLI_Write(
-//                    "Returning to default state, configuration mode deactivated\n");
-//        }
-//        else
-//        {
-//            CLI_Write("Changing to Configuration Mode\n");
-//            isConfigurationMode = true;
-//        }
-//    }
-//}
+
 
 void interruptSetup()
 {
