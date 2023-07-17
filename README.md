@@ -135,7 +135,7 @@ others are external :
 * ## Setting Up The System
   In order to make the msp432 a sensing endpoint you need to :
   - Build the hardware system as shown in this picture :
-  ![Image of how the hardware system should be put together](https://github.com/matteogastaldello/msp432-endpoint/blob/main/msg1257885643-11770.jpg)
+  ![Image of how the hardware system should be put together](https://github.com/matteogastaldello/msp432-endpoint/blob/main/MSP432%20sys.jpeg)
   - Connect the hardware system from the usb slot on the [MSP432P401R LaunchPad Development Kit](https://www.ti.com/lit/ds/slas826e/slas826e.pdf)
     with the usb cable to the PC
   - Open  [CCS v.12.0](https://www.ti.com/tool/download/CCSTUDIO/12.0.0)  and import this github repo , then press the build button and then the flash button to flash the code inside the system.
