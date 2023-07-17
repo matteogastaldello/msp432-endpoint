@@ -1,4 +1,33 @@
 # MSP432 SENSING STATION and WIFI ENDPOINT
+
+# TABLE OF CONTENTS
+- [MSP432 SENSING STATION and WIFI ENDPOINT](#msp432-sensing-station-and-wifi-endpoint)
+- [DESCRIPTION](#description)
+- [REQUIREMENTS](#requirements)
+  * [Hardware Requirements](#hardware-requirements)
+  * [Software Requirements](#software-requirements)
+- [PROJECT LAYOUT](#project-layout)
+- [LIBRARIES](#libraries)
+- [USAGE](#usage)
+  * [Setting Up The System](#setting-up-the-system)
+  * [Running The System](#running-the-system)
+- [HOW DOES IT WORK ?](#how-does-it-work--)
+    + [States Behaviours and Interfaces](#states-behaviours-and-interfaces)
+- [Problems Found During Development](#problems-found-during-development)
+  * [how is the state machine updating rendering and behaviour of the current state](#how-is-the-state-machine-updating-rendering-and-behaviour-of-the-current-state)
+  * [killing and reviving of the ADC14](#killing-and-reviving-of-the-adc14)
+  * [Setting Interrupts Priorities inside the NVIC](#setting-interrupts-priorities-inside-the-nvic)
+  * [Setting a buffer dimension compatible according to what the memory map allowed us to do](#setting-a-buffer-dimension-compatible-according-to-what-the-memory-map-allowed-us-to-do)
+- [Links to video and powerpoint](#links-to-video-and-powerpoint)
+- [SUPPORT](#support)
+- [AUTHORS and ACKNOWLEDGMENTS](#authors-and-acknowledgments)
+  * [Acknowledgments](#acknowledgments)
+- [LICENSE](#license)
+
+<small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
+
+
+
 # DESCRIPTION
 This project realizes an IoT endpoint out of the [MSP432P401R LaunchPad Development Kit](https://www.ti.com/lit/ds/slas826e/slas826e.pdf) making it a device able of sensing the surrounding world using the sensors included in the [BOOSTXL-EDUMKII](https://www.ti.com/tool/BOOSTXL-EDUMKII) and making it also capable of searching for devices into the network thanks to the [CC3100BOOST](https://www.ti.com/tool/CC3100BOOST?keyMatch=&tisearch=search-everything&usecase=partmatches) and pairing with them in order to send the data it collects to make further processing or keeping track of it .
 The device is under control of the user in a very quick and easy way thanks to a clean menu and 3 modes which are chosen from the user using the joystick present in the [BOOSTXL-EDUMKII](https://www.ti.com/tool/BOOSTXL-EDUMKII) and a button present on the board that acts as a 'back button' to come back to the starting menu.
