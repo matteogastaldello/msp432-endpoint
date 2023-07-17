@@ -14,9 +14,73 @@ The device is under control of the user in a very quick and easy way thanks to a
   - ## Software Requirements
     * [CCS v.12.0](https://www.ti.com/tool/download/CCSTUDIO/12.0.0) 
 # PROJECT LAYOUT
-Source code organization
-
-
+msp432_endpoint/\
+├── .launches\
+├── .settings\
+├── Debug\
+├── HAL/\
+│   ├── HAL_I2C.c\
+│   ├── HAL_I2C.h\
+│   ├── HAL_OPT3001.c\
+│   ├── HAL_OPT3001.h\
+│   ├── HAL_TMP006.c\
+│   └── HAL_TMP006.h\
+├── JSON/\
+│   ├── cJSON.c\
+│   └── cJSON.h\
+├── LcdDriver/\
+│   ├── Crystalfontz128x128_ST7735.c\
+│   ├── Crystalfontz128x128_ST7735.h\
+│   ├── HAL_MSP_EXP432P401R_Crystalfontz128x128_ST7735.c\
+│   └── HAL_MSP_EXP432P401R_Crystalfontz128x128_ST7735.h
+├── RemoteSystemsTempFiles\
+├── board\
+├── cli_uart/\
+│   ├── cli_uart.c\
+│   └── cli_uart.h\
+├── driverlib/MSP432P4xx/\
+│   ├── adc14.c\
+│   ├── adc14.h\
+│   ├── driverlib.h\
+│   ├── driverlib.c\
+│   ├── gpio.h\
+│   ├── gpio.c\
+│   ├── i2c.h\
+│   ├── i2c.c\
+│   ├── interrupt.c\
+│   ├── interrupt.h\
+│   ├── wdt_a.c\
+│   └── wdt_a.h\
+├── net/\
+├── simplelink/\
+│   └── include/\
+│       ├── device.h\
+│       ├── fs.h\
+│       ├── netapp.h\
+│       ├── netcfg.h\
+│       ├── simplelink.h\
+│       ├── socket.h\
+│       ├── trace.h\
+│       ├── user.h\
+│       ├── wlan.h\
+│       └── wlan_rx_filters.h\
+├── spi_cc3100/\
+│   ├── spi_cc3100.c\
+│   └── spi_cc3100.h\
+├── targetConfigs\
+├── uart_cc3100/\
+│   ├── uart_cc3100.c\
+│   └── uart_cc3100.h\
+├── .ccsproject\
+├── .gitignore\
+├── .project\
+├── README.md\
+├── README.txt\
+├── main.c\
+├── msp432p401r.cmd\
+├── sl_common.h\
+├── startup_msp432p401r_ccs.c\
+└── system_msp432p401r.c\
 
 # LIBRARIES
 This project uses several libraries, some are given from Texas Instrument and are built to provide a light abstraction level for their products in order to avoid setting up each register of the system to implement the given behaviour.
